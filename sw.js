@@ -1,4 +1,4 @@
-const CACHE_NAME = 'jscad-pro-v1';
+const CACHE_NAME = 'simplemodel3d-v2';
 
 const APP_ASSETS = [
     './',

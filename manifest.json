@@ -1,6 +1,6 @@
 {
-  "name": "JS-CAD Pro — 3D Modeling Workbench",
-  "short_name": "JS-CAD Pro",
+  "name": "SimpleModel3D — 3D Modeling Workbench",
+  "short_name": "SimpleModel3D",
   "description": "Beginner-friendly 3D CAD & Blender preparation modeling app.",
   "start_url": "./index.html",
   "scope": "./",
