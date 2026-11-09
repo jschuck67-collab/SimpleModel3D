@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#2a2a2a">
+    <title>JS-CAD Pro — 3D Modeling Workbench</title>
+    <link rel="icon" type="image/svg+xml" href="./icon.svg">
+    <link rel="manifest" href="./manifest.json">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <div id="ui-layer">
+        <div id="panel-left" class="panel">
+            <div class="panel-header" onclick="togglePanel('panel-left')">
+                <span class="panel-title">Workbench</span>
+                <div style="display: flex; align-items: center;">
+                    <button id="help-btn" onclick="document.getElementById('hotkey-modal').classList.remove('hidden'); event.stopPropagation();" title="Keyboard Shortcuts">?</button>
+                    <span class="panel-toggle" style="margin-left: 10px;">▼</span>
+                </div>
+            </div>
+            
+            <div class="panel-content">
+                <h4>Project Name</h4>
+                <input type="text" id="project-name" class="project-input" value="UNTITLED_PROJECT">
+
+                <div class="grid-3" style="margin-bottom: 5px;">
+                    <button onclick="newScene()" class="btn-small" style="background:#c0392b;">New</button>
+                    <button onclick="saveProject()" class="btn-small" style="background:#2980b9;">Save</button>
+                    <button onclick="document.getElementById('file-input').click()" class="btn-small" style="background:#2980b9;">Load</button>
+                    <input type="file" id="file-input" style="display:none" accept=".json" onchange="loadProject(event)">
+                </div>
+                
+                <div class="grid-2" style="margin-bottom: 5px;">
+                    <button onclick="importSTL()" class="btn-small" style="background: #27ae60; border: none; margin-bottom: 0;">Import STL</button>
+                    <button onclick="document.getElementById('svg-input').click()" class="btn-small" style="background: #e67e22; border: none; margin-bottom: 0;">Import SVG</button>
+                </div>
+                <select class="btn-small" style="width: 100%; background: #2980b9; border: none; margin-bottom: 15px; color: white; cursor: pointer;" onchange="if(this.value==='all') exportSTL(); else if(this.value==='sel') exportSelectedSTL(); else if(this.value==='all-glb') exportGLB(); else if(this.value==='sel-glb') exportSelectedGLB(); this.value='';">
+                    <option value="" disabled selected>Export 3D Model...</option>
+                    <option value="all">Export All (STL)</option>
+                    <option value="sel">Export Selected (STL)</option>
+                    <option value="all-glb">Export All (GLB - Colors/Glass)</option>
+                    <option value="sel-glb">Export Selected (GLB - Colors/Glass)</option>
+                </select>
+                <input type="file" id="stl-input" style="display:none" accept=".stl" onchange="handleSTLImport(event)">
+                <input type="file" id="svg-input" style="display:none" accept=".svg" onchange="handleSVGImport(event)">
+
+                <h4>Tools</h4>
+                <div class="grid-3">
+                    <button id="tool-move" class="active-tool" title="Move (M or G in Blender mode)">M</button>
+                    <button id="tool-rotate" title="Rotate (R)">R</button>
+                    <button id="tool-scale" title="Scale (S)">S</button>
+                </div>
+                <div class="grid-2" style="margin-bottom: 5px;">
+                    <button id="space-toggle" onclick="toggleSpace()" title="Toggle Local/World Space (W)">Space: WORLD</button>
+                    <button id="tool-ruler" onclick="handleRulerButton()" title="Ruler Tool (Q)">Ruler (Q)</button>
+                </div>
+                <button id="keymap-toggle" class="btn-keymap btn-small" onclick="toggleKeymap()" title="Switch between CAD keys (M/R/S) and Blender keys (G/R/S)">Keymap: CAD (M/R/S)</button>
+                
+                <h4 class="accordion-header" onclick="this.classList.toggle('collapsed-parent'); this.nextElementSibling.classList.toggle('collapsed');"><span>Create</span> <span class="chevron">▼</span></h4>
+                <div class="accordion-content">
+                    <select id="shape-select" onchange="createShape(this.value); this.value='';">
+                        <option value="" disabled selected>+ Add Shape...</option>
+                        <option value="box">Cube</option>
+                        <option value="sphere">Sphere</option>
+                        <option value="dome">Dome (Half-Sphere)</option>
+                        <option value="cylinder">Cylinder</option>
+                        <option value="cone">Cone</option>
+                        <option value="pyramid">Pyramid</option>
+                        <option value="wedge">Wedge / Ramp</option>
+                        <option value="hexprism">Hexagon Prism</option>
+                        <option value="torus">Torus</option>
+                        <option value="knot">Torus Knot</option>
+                        <option value="plane">Plane</option>
+                        <option value="tubeModal">Tube / Pipe / Nut...</option>
+                        <option value="bevelModal">Beveled Shape...</option>
+                        <option value="text">3D Text</option>
+                    </select>
+                </div>
+
+                <h4 class="accordion-header" onclick="this.classList.toggle('collapsed-parent'); this.nextElementSibling.classList.toggle('collapsed');"><span>Structure</span> <span class="chevron">▼</span></h4>
+                <div class="accordion-content">
+                    <div class="grid-3">
+                        <button onclick="groupSelected()" class="btn-small" title="Group Selected (G or Ctrl+G)">Group</button>
+                        <button onclick="ungroupSelected()" class="btn-small" title="Ungroup Selected (U)">Ungroup</button>
+                        <button onclick="cloneSelected()" class="btn-small" title="Clone Selected (Shift+D)">Clone</button>
+                    </div>
+                </div>
+
+                <h4 class="accordion-header" onclick="this.classList.toggle('collapsed-parent'); this.nextElementSibling.classList.toggle('collapsed');"><span>Boolean Ops</span> <span class="chevron">▼</span></h4>
+                <div class="accordion-content">
+                    <div class="status-msg" id="status-text">Select objects...</div>
+                    <div class="grid-2" style="margin-bottom: 5px;">
+                        <button id="cutter-toggle" class="btn-cutter btn-small" onclick="toggleCutterMode()" title="Ghost red preview for hole cutters">👻 Hole Cutter</button>
+                        <button class="btn-small" onclick="swapBooleanOrder()" title="Swap which selected object is Base vs Cutter">⇄ Swap Order</button>
+                    </div>
+                    <div class="grid-3">
+                        <button class="btn-bool btn-small" onclick="performBoolean('union')">Union</button>
+                        <button class="btn-bool btn-small" onclick="performBoolean('subtract')">Sub</button>
+                        <button class="btn-bool btn-small" onclick="performBoolean('intersect')">Inter</button>
+                    </div>
+                </div>
+
+                <h4 class="accordion-header collapsed-parent" onclick="this.classList.toggle('collapsed-parent'); this.nextElementSibling.classList.toggle('collapsed');"><span>Align & Array</span> <span class="chevron">▼</span></h4>
+                <div class="accordion-content collapsed">
+                    <div class="label-row" style="margin-top: 5px;">ALIGN (LAST SELECTED)</div>
+                    <div class="inline-row" style="margin-bottom: 5px;">
+                        <span class="label-x" style="font-weight: bold; width: 15px; text-align: center;">X</span>
+                        <button onclick="alignObjects('x', 'min')" style="background: #2980b9; padding: 4px;">Min</button>
+                        <button onclick="alignObjects('x', 'center')" style="background: #2980b9; padding: 4px;">Ctr</button>
+                        <button onclick="alignObjects('x', 'max')" style="background: #2980b9; padding: 4px;">Max</button>
+                    </div>
+                    <div class="inline-row" style="margin-bottom: 5px;">
+                        <span class="label-y" style="font-weight: bold; width: 15px; text-align: center;">Y</span>
+                        <button onclick="alignObjects('y', 'min')" style="background: #2980b9; padding: 4px;">Min</button>
+                        <button onclick="alignObjects('y', 'center')" style="background: #2980b9; padding: 4px;">Ctr</button>
+                        <button onclick="alignObjects('y', 'max')" style="background: #2980b9; padding: 4px;">Max</button>
+                    </div>
+                    <div class="inline-row" style="margin-bottom: 15px;">
+                        <span class="label-z" style="font-weight: bold; width: 15px; text-align: center;">Z</span>
+                        <button onclick="alignObjects('z', 'min')" style="background: #2980b9; padding: 4px;">Min</button>
+                        <button onclick="alignObjects('z', 'center')" style="background: #2980b9; padding: 4px;">Ctr</button>
+                        <button onclick="alignObjects('z', 'max')" style="background: #2980b9; padding: 4px;">Max</button>
+                    </div>
+                    <button onclick="document.getElementById('array-modal').classList.remove('hidden')" style="background: #8e44ad;">Array Tool</button>
+                </div>
+
+                <h4 class="accordion-header collapsed-parent" onclick="this.classList.toggle('collapsed-parent'); this.nextElementSibling.classList.toggle('collapsed');"><span>Snapping</span> <span class="chevron">▼</span></h4>
+                <div class="accordion-content collapsed">
+                    <button id="tool-drop" onclick="handleDropButton()" title="Face Snap (T)" style="background: #e67e22; margin-bottom: 10px;">Face Snap Tool (T)</button>
+                    
+                    <div class="grid-2" style="margin-bottom: 5px;">
+                        <button id="snap-toggle" class="btn-snap">Grid Snap: OFF</button>
+                        <button id="vertex-snap-toggle" class="btn-snap" onclick="toggleVertexSnap()">Vertex Snap: OFF</button>
+                    </div>
+                    <div class="inline-row" style="margin-bottom: 10px;">
+                        <span style="font-size: 0.7rem; color: #888; font-weight: bold; flex: 1;">GRID DIST:</span>
+                        <select id="snap-val" style="flex: 2; margin-bottom: 0;">
+                            <option value="0.1">0.1</option>
+                            <option value="0.5" selected>0.5</option>
+                            <option value="1.0">1.0</option>
+                            <option value="5.0">5.0</option>
+                            <option value="10.0">10.0</option>
+                        </select>
+                    </div>
+                    <div class="grid-2" style="margin-bottom: 5px;">
+                        <button onclick="snapToGrid()" class="btn-small" title="Align to nearest grid line">Snap Grid</button>
+                        <button onclick="dropToFloor()" class="btn-small" title="Align bottom to floor">Drop Floor</button>
+                    </div>
+                    <button onclick="centerOnPlate()" class="btn-small" style="background: #27ae60;" title="Center model on X/Y=0 and rest base on Z=0 floor">Center Assembly on Plate</button>
+                </div>
+
+                <h4 class="accordion-header collapsed-parent" onclick="this.classList.toggle('collapsed-parent'); this.nextElementSibling.classList.toggle('collapsed');"><span>Symmetry</span> <span class="chevron">▼</span></h4>
+                <div class="accordion-content collapsed">
+                    <div class="check-row" onclick="document.getElementById('mirror-copy').click(); event.stopPropagation();">
+                        <input type="checkbox" id="mirror-copy" checked onclick="event.stopPropagation();">
+                        <span>Mirror with Copy</span>
+                    </div>
+                    <div class="grid-3">
+                        <button class="btn-mirror btn-small" onclick="mirrorSelected('x')">Mirr X</button>
+                        <button class="btn-mirror btn-small" onclick="mirrorSelected('y')">Mirr Y</button>
+                        <button class="btn-mirror btn-small" onclick="mirrorSelected('z')">Mirr Z</button>
+                    </div>
+                </div>
+
+                <h4 class="accordion-header collapsed-parent" onclick="this.classList.toggle('collapsed-parent'); this.nextElementSibling.classList.toggle('collapsed');"><span>Viewport</span> <span class="chevron">▼</span></h4>
+                <div class="accordion-content collapsed">
+                    <div class="unit-toggle">
+                        <button id="unit-mm" class="unit-btn active-unit">MM</button>
+                        <button id="unit-in" class="unit-btn">IN</button>
+                    </div>
+                    
+                    <h4>Camera Views</h4>
+                    <div class="grid-3" style="margin-bottom: 10px;">
+                        <button onclick="setView('top')" class="btn-small" title="Top View (7)">Top</button>
+                        <button onclick="setView('front')" class="btn-small" title="Front View (1)">Front</button>
+                        <button onclick="setView('right')" class="btn-small" title="Right View (3)">Right</button>
+                    </div>
+
+                    <div class="grid-2">
+                        <button id="wire-toggle" class="btn-small">Wireframe</button>
+                        <button id="dim-toggle" onclick="toggleDimensions()" class="btn-small">Dimensions: OFF</button>
+                    </div>
+                    <div class="grid-2">
+                        <button id="theme-toggle" onclick="toggleTheme()" class="btn-small">Theme: DARK</button>
+                        <button onclick="toggleCamera()" title="Toggle Camera (5)">Persp / Ortho</button>
+                    </div>
+                    <div class="input-group">
+                        <div class="label-row" style="margin-top:5px;">LIGHT INTENSITY (<span id="light-val">100</span>%)</div>
+                        <input type="range" id="light-intensity" min="0" max="2" step="0.1" value="1" oninput="updateLighting(this.value)">
+                    </div>
+                    <div class="inline-row">
+                        <button id="build-plate-toggle" class="btn-plate">Build Plate: OFF</button>
+                        <select id="printer-select" onchange="updateBuildPlate(this.value)">
+                            <option value="bambu">Bambu P1S</option>
+                            <option value="ender3">Ender 3</option>
+                            <option value="prusa4">Prusa MK4</option>
+                            <option value="mini">Prusa Mini</option>
+                        </select>
+                    </div>
+                    <button id="rand-color-toggle" class="btn-color">Random Colors: OFF</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="right-column">
+            <div id="outliner" class="panel">
+                <div class="panel-header" onclick="togglePanel('outliner')">
+                    <span class="panel-title">Outliner</span>
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <button class="outliner-icon-btn" onclick="unhideAll(); event.stopPropagation();" title="Unhide All Objects (Alt+H)">👁 All</button>
+                        <span class="panel-toggle">▼</span>
+                    </div>
+                </div>
+                <div class="panel-content" style="padding: 10px;">
+                    <div id="outliner-list" class="outliner-list">
+                        <div class="status-msg" style="margin:0; padding:10px;">Scene is empty</div>
+                    </div>
+                </div>
+            </div>
+
+        <div id="inspector" class="panel hidden">
+            <div class="panel-header" onclick="togglePanel('inspector')">
+                <span class="panel-title">Properties</span>
+                <span class="panel-toggle">▼</span>
+            </div>
+
+            <div class="panel-content">
+                <div class="input-group" style="margin-bottom: 8px;">
+                    <div class="label-row">NAME</div>
+                    <input type="text" id="objName" style="margin-bottom: 2px;">
+                </div>
+
+                <h4 class="accordion-header" onclick="this.classList.toggle('collapsed-parent'); this.nextElementSibling.classList.toggle('collapsed');"><span>Transform</span> <span class="chevron">▼</span></h4>
+                <div class="accordion-content">
+                    <div class="input-group">
+                        <div class="label-row">SIZE / DIMENSIONS (<span class="unit-text">mm</span>)</div>
+                        <div class="input-row"><label class="label-x">W</label><input type="number" id="dimX" step="0.1"></div>
+                        <div class="input-row"><label class="label-y">D</label><input type="number" id="dimY" step="0.1"></div>
+                        <div class="input-row"><label class="label-z">H</label><input type="number" id="dimZ" step="0.1"></div>
+                    </div>
+
+                    <div class="input-group">
+                        <div class="label-row">SCALE</div>
+                        <div class="input-row"><label class="label-x">X</label><input type="number" id="scaleX" step="0.1" value="1.00"></div>
+                        <div class="input-row"><label class="label-y">Y</label><input type="number" id="scaleY" step="0.1" value="1.00"></div>
+                        <div class="input-row"><label class="label-z">Z</label><input type="number" id="scaleZ" step="0.1" value="1.00"></div>
+                    </div>
+
+                    <div class="input-group">
+                        <div class="label-row">LOCATION (<span class="unit-text">mm</span>)</div>
+                        <div class="input-row"><label class="label-x">X</label><input type="number" id="posX" step="0.5"></div>
+                        <div class="input-row"><label class="label-y">Y</label><input type="number" id="posY" step="0.5"></div>
+                        <div class="input-row"><label class="label-z">Z</label><input type="number" id="posZ" step="0.5"></div>
+                    </div>
+
+                    <div class="input-group">
+                        <div class="label-row">ROTATION (deg)</div>
+                        <div class="input-row"><label class="label-x">X</label><input type="number" id="rotX" step="5"></div>
+                        <div class="input-row"><label class="label-y">Y</label><input type="number" id="rotY" step="5"></div>
+                        <div class="input-row"><label class="label-z">Z</label><input type="number" id="rotZ" step="5"></div>
+                    </div>
+                </div>
+
+                <h4 class="accordion-header" onclick="this.classList.toggle('collapsed-parent'); this.nextElementSibling.classList.toggle('collapsed');"><span>Material & Appearance</span> <span class="chevron">▼</span></h4>
+                <div class="accordion-content">
+                    <div class="input-group">
+                        <div class="label-row">MATERIAL COLOR & TYPE</div>
+                        <div class="inline-row" style="margin-bottom: 4px;">
+                            <input type="color" id="objColor" style="flex: 1;">
+                            <select id="objMaterial" style="flex: 2; margin-bottom: 0;">
+                                <option value="matte">Matte Plastic</option>
+                                <option value="metal">Metal</option>
+                                <option value="glass">Glass</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <div class="label-row">OPACITY (<span id="opacity-val">100</span>%)</div>
+                        <input type="range" id="objOpacity" min="0" max="1" step="0.05" value="1">
+                    </div>
+                </div>
+
+                <h4 class="accordion-header collapsed-parent" onclick="this.classList.toggle('collapsed-parent'); this.nextElementSibling.classList.toggle('collapsed');"><span>Apply, Reset & Pivot</span> <span class="chevron">▼</span></h4>
+                <div class="accordion-content collapsed">
+                    <div class="input-group">
+                        <div class="label-row">APPLY TRANSFORM (CTRL+A)</div>
+                        <div class="grid-4">
+                            <button onclick="applySelectedTransform('loc')" class="btn-small" title="Bake Location into Geometry & Move Origin to 0,0,0 (Ctrl+A)">Loc</button>
+                            <button onclick="applySelectedTransform('rot')" class="btn-small" title="Bake Rotation into Geometry & Zero Rotation (Ctrl+A)">Rot</button>
+                            <button onclick="applySelectedTransform('scale')" class="btn-small" title="Bake Scale into Geometry & Reset Scale to 1.0 (Ctrl+A)">Scale</button>
+                            <button onclick="applySelectedTransform('all')" class="btn-small" style="background:#2980b9;" title="Apply All Transforms: Location, Rotation & Scale (Ctrl+A)">All</button>
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <div class="label-row">RESET TRANSFORM (BLENDER)</div>
+                        <div class="grid-3">
+                            <button onclick="resetSelectedTransform('pos')" class="btn-small" title="Reset Position (Alt+G)">Pos</button>
+                            <button onclick="resetSelectedTransform('rot')" class="btn-small" title="Reset Rotation (Alt+R)">Rot</button>
+                            <button onclick="resetSelectedTransform('scale')" class="btn-small" title="Reset Scale (Alt+S)">Scale</button>
+                        </div>
+                    </div>
+                    
+                    <div class="input-group">
+                        <div class="label-row">SET ORIGIN (PIVOT)</div>
+                        <div class="grid-2">
+                            <button onclick="setOrigin('center')" class="btn-small" title="Center Pivot">Center</button>
+                            <button onclick="setOrigin('base')" class="btn-small" title="Base Pivot">Base</button>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="delete-btn" title="Delete Object (Delete / X)" style="background:#8a3333; border:none; margin-top:8px;">Delete Object</button>
+            </div>
+        </div>
+        </div>
+    </div>
+
+    <div id="ruler-label"></div>
+
+    <div id="dim-x" class="dim-label"></div>
+    <div id="dim-y" class="dim-label"></div>
+    <div id="dim-z" class="dim-label"></div>
+
+    <!-- BLENDER-STYLE RIGHT-CLICK CONTEXT MENU -->
+    <div id="context-menu" class="hidden"></div>
+
+    <!-- HOTKEY CHEAT SHEET MODAL -->
+    <div id="hotkey-modal" class="modal-overlay hidden" onclick="this.classList.add('hidden')">
+        <div class="panel" style="width: 400px; box-shadow: 0 10px 40px rgba(0,0,0,0.8);" onclick="event.stopPropagation()">
+            <div class="panel-header" style="cursor: default;">
+                <span class="panel-title">Keyboard Shortcuts</span>
+                <span class="panel-toggle" style="cursor: pointer;" onclick="document.getElementById('hotkey-modal').classList.add('hidden')">✖</span>
+            </div>
+            <div class="panel-content" style="max-height: 440px; overflow-y: auto;">
+                <table class="hotkey-table">
+                    <tr><td>Middle Mouse Drag</td><td>Orbit / Rotate View</td></tr>
+                    <tr><td>Shift + Middle Mouse</td><td>Pan View</td></tr>
+                    <tr><td>Scroll / Ctrl + MMB</td><td>Zoom View</td></tr>
+                    <tr><td>Right-Click</td><td>Object / Scene Context Menu</td></tr>
+                    <tr><td>Alt + Left Drag</td><td>Orbit (Trackpad / 3-Btn Emulation)</td></tr>
+                    <tr><td>Left-Click + Drag</td><td>Box / Marquee Selection (+Shift Add)</td></tr>
+                    <tr><td>M (or G in Blender)</td><td>Move / Grab Tool</td></tr>
+                    <tr><td>R</td><td>Rotate Tool</td></tr>
+                    <tr><td>S</td><td>Scale Tool</td></tr>
+                    <tr><td>Ctrl + A</td><td>Apply Transform Menu (Loc / Rot / Scale)</td></tr>
+                    <tr><td>Alt + G / R / S</td><td>Reset Position / Rotation / Scale</td></tr>
+                    <tr><td>A / Alt + A</td><td>Select All / Deselect All</td></tr>
+                    <tr><td>W</td><td>Toggle Local / World Space</td></tr>
+                    <tr><td>H / Alt + H</td><td>Hide Selected / Unhide All</td></tr>
+                    <tr><td>Q</td><td>Measurement Ruler</td></tr>
+                    <tr><td>T</td><td>Face Snap Tool</td></tr>
+                    <tr><td>Shift + D</td><td>Clone / Duplicate Selected</td></tr>
+                    <tr><td>Ctrl + C / Ctrl + V</td><td>Copy / Paste Selected</td></tr>
+                    <tr><td>Delete / X</td><td>Delete Selected</td></tr>
+                    <tr><td>G (or Ctrl + G)</td><td>Group Selected</td></tr>
+                    <tr><td>U</td><td>Ungroup Selected</td></tr>
+                    <tr><td>Ctrl + Z / Ctrl + Y</td><td>Undo / Redo</td></tr>
+                    <tr><td>0 or . / Home</td><td>Frame Selected / Frame All</td></tr>
+                    <tr><td>1 / 3 / 7</td><td>Front / Right / Top View</td></tr>
+                    <tr><td>Ctrl + 1 / 3 / 7</td><td>Back / Left / Bottom View</td></tr>
+                    <tr><td>5</td><td>Toggle Perspective / Orthographic</td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TUBE / PIPE / NUT MODAL -->
+    <div id="tube-modal" class="modal-overlay hidden">
+        <div class="panel" style="width: 320px; box-shadow: 0 10px 40px rgba(0,0,0,0.8);">
+            <div class="panel-header" style="cursor: default;">
+                <span class="panel-title">Create Tube / Pipe / Nut</span>
+                <span class="panel-toggle" style="cursor: pointer;" onclick="closeTubeModal()">✖</span>
+            </div>
+            <div class="panel-content">
+                <div class="input-group">
+                    <div class="label-row">OUTER RADIUS (<span id="tube-outer-val">1.5</span>)</div>
+                    <input type="range" id="tube-outer" min="0.2" max="10" step="0.1" value="1.5" oninput="document.getElementById('tube-outer-val').innerText=this.value">
+                </div>
+                <div class="input-group">
+                    <div class="label-row">INNER HOLE RADIUS (<span id="tube-inner-val">0.8</span>)</div>
+                    <input type="range" id="tube-inner" min="0.05" max="9.5" step="0.05" value="0.8" oninput="document.getElementById('tube-inner-val').innerText=this.value">
+                </div>
+                <div class="input-group">
+                    <div class="label-row">HEIGHT (<span id="tube-height-val">2.0</span>)</div>
+                    <input type="range" id="tube-height" min="0.1" max="10" step="0.1" value="2.0" oninput="document.getElementById('tube-height-val').innerText=this.value">
+                </div>
+                <div class="input-group">
+                    <div class="label-row">SIDES (<span id="tube-seg-val">32</span> — use 6 for Hex Nut)</div>
+                    <input type="range" id="tube-segments" min="3" max="64" step="1" value="32" oninput="document.getElementById('tube-seg-val').innerText=this.value">
+                </div>
+                <div class="grid-2" style="margin-top: 15px;">
+                    <button onclick="closeTubeModal()" style="background: #555; border: none;">Cancel</button>
+                    <button onclick="confirmTubeShape()" style="background: #4a90e2; border: none;">Create</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TEXT CREATION MODAL -->
+    <div id="text-modal" class="modal-overlay hidden">
+        <div class="panel" style="width: 320px; box-shadow: 0 10px 40px rgba(0,0,0,0.8);">
+            <div class="panel-header" style="cursor: default;">
+                <span class="panel-title">Create 3D Text</span>
+                <span class="panel-toggle" style="cursor: pointer;" onclick="closeTextModal()">✖</span>
+            </div>
+            <div class="panel-content">
+                <div class="input-group">
+                    <div class="label-row">TEXT</div>
+                    <input type="text" id="text-input" value="3D Text" style="margin-bottom: 5px;">
+                </div>
+                <div class="grid-2">
+                    <div class="input-group">
+                        <div class="label-row">FONT</div>
+                        <select id="text-font">
+                            <option value="helvetiker">Helvetiker</option>
+                            <option value="optimer">Optimer</option>
+                            <option value="gentilis">Gentilis</option>
+                            <option value="droid_sans">Droid Sans</option>
+                            <option value="droid_serif">Droid Serif</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <div class="label-row">STYLE</div>
+                        <select id="text-style">
+                            <option value="regular">Regular</option>
+                            <option value="bold">Bold</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <div class="label-row">HEIGHT (<span id="text-size-val">1.0</span>)</div>
+                    <input type="range" id="text-size" min="0.1" max="10" step="0.1" value="1.0" oninput="document.getElementById('text-size-val').innerText=this.value">
+                </div>
+                <div class="input-group">
+                    <div class="label-row">DEPTH (<span id="text-depth-val">0.2</span>)</div>
+                    <input type="range" id="text-depth" min="0.05" max="5" step="0.05" value="0.2" oninput="document.getElementById('text-depth-val').innerText=this.value">
+                </div>
+                <div class="grid-2" style="margin-top: 15px;">
+                    <button onclick="closeTextModal()" style="background: #555; border: none;">Cancel</button>
+                    <button onclick="confirmTextShape()" style="background: #4a90e2; border: none;">Create</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BEVEL CREATION MODAL -->
+    <div id="bevel-modal" class="modal-overlay hidden">
+        <div class="panel" style="width: 320px; box-shadow: 0 10px 40px rgba(0,0,0,0.8);">
+            <div class="panel-header" style="cursor: default;">
+                <span class="panel-title">Create Beveled Shape</span>
+                <span class="panel-toggle" style="cursor: pointer;" onclick="closeBevelModal()">✖</span>
+            </div>
+            <div class="panel-content">
+                <div class="input-group">
+                    <div class="label-row">SHAPE TYPE</div>
+                    <select id="bevel-type">
+                        <option value="box">Cube</option>
+                        <option value="cylinder">Cylinder</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <div class="label-row">BEVEL SIZE (<span id="bevel-size-val">0.2</span>)</div>
+                    <input type="range" id="bevel-size" min="0.01" max="0.5" step="0.01" value="0.2" oninput="document.getElementById('bevel-size-val').innerText=this.value">
+                </div>
+                <div class="input-group">
+                    <div class="label-row">SMOOTHNESS (<span id="bevel-seg-val">4</span> Segments)</div>
+                    <input type="range" id="bevel-segments" min="1" max="16" step="1" value="4" oninput="document.getElementById('bevel-seg-val').innerText=this.value">
+                </div>
+                <div class="grid-2" style="margin-top: 15px;">
+                    <button onclick="closeBevelModal()" style="background: #555; border: none;">Cancel</button>
+                    <button onclick="confirmBevelShape()" style="background: #4a90e2; border: none;">Create</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ARRAY CREATION MODAL -->
+    <div id="array-modal" class="modal-overlay hidden">
+        <div class="panel" style="width: 320px; box-shadow: 0 10px 40px rgba(0,0,0,0.8);">
+            <div class="panel-header" style="cursor: default;">
+                <span class="panel-title">Array / Pattern</span>
+                <span class="panel-toggle" style="cursor: pointer;" onclick="this.closest('.modal-overlay').classList.add('hidden')">✖</span>
+            </div>
+            <div class="panel-content">
+                <div class="input-group">
+                    <div class="label-row">TYPE</div>
+                    <select id="array-type" onchange="document.getElementById('array-linear-settings').style.display = this.value === 'linear' ? 'block' : 'none'; document.getElementById('array-radial-settings').style.display = this.value === 'radial' ? 'block' : 'none';">
+                        <option value="linear">Linear</option>
+                        <option value="radial">Radial</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <div class="label-row">COUNT (Copies)</div>
+                    <input type="number" id="array-count" value="4" min="2" step="1">
+                </div>
+                <div id="array-linear-settings">
+                    <div class="input-group">
+                        <div class="label-row">OFFSET RATIO (1 = 100% Size)</div>
+                        <div class="input-row"><label class="label-x">X</label><input type="number" id="array-dx" value="1.5" step="0.1"></div>
+                        <div class="input-row"><label class="label-y">Y</label><input type="number" id="array-dy" value="0" step="0.1"></div>
+                        <div class="input-row"><label class="label-z">Z</label><input type="number" id="array-dz" value="0" step="0.1"></div>
+                    </div>
+                </div>
+                <div id="array-radial-settings" style="display:none;">
+                    <div class="input-group">
+                        <div class="label-row">ROTATION AXIS</div>
+                        <select id="array-axis">
+                            <option value="z">Z Axis (Up)</option>
+                            <option value="y">Y Axis</option>
+                            <option value="x">X Axis</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <div class="label-row">TOTAL REVOLUTION (deg)</div>
+                        <input type="number" id="array-angle" value="360" step="15">
+                    </div>
+                </div>
+                <div class="grid-2" style="margin-top: 15px;">
+                    <button onclick="this.closest('.modal-overlay').classList.add('hidden')" style="background: #555; border: none;">Cancel</button>
+                    <button onclick="performArray()" style="background: #4a90e2; border: none;">Create Array</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+                "three-mesh-bvh": "https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.7.3/build/index.module.js",
+                "three-bvh-csg": "https://cdn.jsdelivr.net/npm/three-bvh-csg@0.0.16/build/index.module.js"
+            }
+        }
+    </script>
+    <script type="module" src="js/main.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').catch((err) => {
+                    console.warn('ServiceWorker registration skipped:', err);
+                });
+            });
+        }
+    </script>
+</body>
+</html>
