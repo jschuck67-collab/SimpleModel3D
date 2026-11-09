@@ -1,4 +1,4 @@
-const CACHE_NAME = 'simplemodel3d-v2';
+const CACHE_NAME = 'simplemodel3d-v3';
 
 const APP_ASSETS = [
     './',
@@ -11,6 +11,7 @@ const APP_ASSETS = [
     './js/scene.js',
     './js/shapes.js',
     './js/booleanOps.js',
+    './js/modifiers.js',
     './js/tools.js',
     './js/io.js',
     './js/ui.js',

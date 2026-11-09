@@ -102,6 +102,24 @@
                     </div>
                 </div>
 
+                <h4 class="accordion-header" onclick="this.classList.toggle('collapsed-parent'); this.nextElementSibling.classList.toggle('collapsed');"><span>Deform & Modify</span> <span class="chevron">▼</span></h4>
+                <div class="accordion-content">
+                    <div class="grid-2" style="margin-bottom: 5px;">
+                        <button id="tool-extrude" class="btn-small" style="background:#8e44ad;" onclick="openModifyModal('extrude')" title="Extrude or Inset a Face (E)">Extrude / Inset (E)</button>
+                        <button class="btn-small" style="background:#8e44ad;" onclick="openModifyModal('bevel')" title="Round Fillet or 45° Chamfer Edges (Ctrl+B)">Bevel / Chamfer</button>
+                    </div>
+                    <div class="grid-2" style="margin-bottom: 5px;">
+                        <button class="btn-small" style="background:#2980b9;" onclick="openModifyModal('hollow')" title="Hollow out into an open-top box or cup">Hollow / Shell</button>
+                        <button class="btn-small" style="background:#2980b9;" onclick="openModifyModal('slice')" title="Slice solid object along X, Y, Z, or Floor">Plane Cut / Slice</button>
+                    </div>
+                    <div class="grid-4" style="margin-bottom: 5px;">
+                        <button class="btn-small" onclick="openModifyModal('taper')" title="Pinch or flare top relative to bottom">Taper</button>
+                        <button class="btn-small" onclick="openModifyModal('shear')" title="Slant/skew top while keeping bottom flat">Shear</button>
+                        <button class="btn-small" onclick="openModifyModal('twist')" title="Spiral twist around axis">Twist</button>
+                        <button class="btn-small" onclick="openModifyModal('bend')" title="Bend/curve object along an arc">Bend</button>
+                    </div>
+                </div>
+
                 <h4 class="accordion-header collapsed-parent" onclick="this.classList.toggle('collapsed-parent'); this.nextElementSibling.classList.toggle('collapsed');"><span>Align & Array</span> <span class="chevron">▼</span></h4>
                 <div class="accordion-content collapsed">
                     <div class="label-row" style="margin-top: 5px;">ALIGN (LAST SELECTED)</div>
@@ -345,6 +363,8 @@
                     <tr><td>M (or G in Blender)</td><td>Move / Grab Tool</td></tr>
                     <tr><td>R</td><td>Rotate Tool</td></tr>
                     <tr><td>S</td><td>Scale Tool</td></tr>
+                    <tr><td>E</td><td>Face Extrude / Inset Tool</td></tr>
+                    <tr><td>Ctrl + B</td><td>Edge Bevel / 45° Chamfer Tool</td></tr>
                     <tr><td>Ctrl + A</td><td>Apply Transform Menu (Loc / Rot / Scale)</td></tr>
                     <tr><td>Alt + G / R / S</td><td>Reset Position / Rotation / Scale</td></tr>
                     <tr><td>A / Alt + A</td><td>Select All / Deselect All</td></tr>
@@ -521,6 +541,172 @@
                 <div class="grid-2" style="margin-top: 15px;">
                     <button onclick="this.closest('.modal-overlay').classList.add('hidden')" style="background: #555; border: none;">Cancel</button>
                     <button onclick="performArray()" style="background: #4a90e2; border: none;">Create Array</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- DEFORM & MODIFY MODAL -->
+    <div id="modify-modal" class="modal-overlay hidden">
+        <div class="panel" style="width: 330px; box-shadow: 0 10px 40px rgba(0,0,0,0.8);">
+            <div class="panel-header" style="cursor: default;">
+                <span class="panel-title" id="modify-modal-title">Deform & Modify</span>
+                <span class="panel-toggle" style="cursor: pointer;" onclick="closeModifyModal()">✖</span>
+            </div>
+            <div class="panel-content">
+                <!-- 1. EXTRUDE / INSET -->
+                <div id="mod-pane-extrude" class="mod-pane" style="display:none;">
+                    <div class="input-group">
+                        <div class="label-row">TARGET FACE</div>
+                        <select id="mod-extrude-face" style="margin-bottom: 6px;">
+                            <option value="top">Top Face (+Z)</option>
+                            <option value="bottom">Bottom Face (-Z)</option>
+                            <option value="front">Front Face (-Y)</option>
+                            <option value="back">Back Face (+Y)</option>
+                            <option value="right">Right Face (+X)</option>
+                            <option value="left">Left Face (-X)</option>
+                        </select>
+                        <button class="btn-small" style="background:#e67e22;" onclick="startInteractiveExtrudePick()" title="Click directly on any face in the 3D viewport">🎯 Or Click a Face on Model</button>
+                    </div>
+                    <div class="input-group">
+                        <div class="label-row">INSET MARGIN (<span class="unit-text">mm</span>) — 0 = Full Face</div>
+                        <input type="number" id="mod-extrude-inset" value="2.0" min="0" step="0.5">
+                    </div>
+                    <div class="input-group">
+                        <div class="label-row">EXTRUDE HEIGHT (<span class="unit-text">mm</span>) — Negative = Pocket</div>
+                        <input type="number" id="mod-extrude-dist" value="4.0" step="0.5">
+                    </div>
+                    <div class="input-group">
+                        <div class="label-row">PROFILE SHAPE</div>
+                        <select id="mod-extrude-profile">
+                            <option value="match">Rectangular / Match Face</option>
+                            <option value="circle">Circular Boss / Cylindrical Hole</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 2. BEVEL / CHAMFER -->
+                <div id="mod-pane-bevel" class="mod-pane" style="display:none;">
+                    <div class="input-group">
+                        <div class="label-row">EDGE STYLE</div>
+                        <select id="mod-bevel-style">
+                            <option value="fillet">Round Bevel (Fillet)</option>
+                            <option value="chamfer">45° Angled Chamfer (Flat)</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <div class="label-row">BASE SHAPE PROFILE</div>
+                        <select id="mod-bevel-shape">
+                            <option value="box">Box / Rectangular Block</option>
+                            <option value="cylinder">Cylinder / Round Disc</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <div class="label-row">BEVEL WIDTH / RADIUS (<span class="unit-text">mm</span>)</div>
+                        <input type="number" id="mod-bevel-width" value="2.0" min="0.1" step="0.2">
+                    </div>
+                </div>
+
+                <!-- 3. HOLLOW / SHELL -->
+                <div id="mod-pane-hollow" class="mod-pane" style="display:none;">
+                    <div class="input-group">
+                        <div class="label-row">OPENING FACE</div>
+                        <select id="mod-hollow-mode">
+                            <option value="top">Open Top (Box / Cup / Planter)</option>
+                            <option value="bottom">Open Bottom (Cover / Lid)</option>
+                            <option value="through">Open Through (Tube / Sleeve)</option>
+                            <option value="closed">Closed Hollow Shell</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <div class="label-row">WALL THICKNESS (<span class="unit-text">mm</span>)</div>
+                        <input type="number" id="mod-hollow-wall" value="2.0" min="0.2" step="0.5">
+                    </div>
+                </div>
+
+                <!-- 4. PLANE CUT / SLICE -->
+                <div id="mod-pane-slice" class="mod-pane" style="display:none;">
+                    <div class="input-group">
+                        <div class="label-row">SLICE PLANE</div>
+                        <select id="mod-slice-plane">
+                            <option value="z">Z Center (Horizontal Cut)</option>
+                            <option value="x">X Center (Left / Right Cut)</option>
+                            <option value="y">Y Center (Front / Back Cut)</option>
+                            <option value="floor">Z = 0 Floor (Trim Below Bed)</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <div class="label-row">RESULT MODE (100% WATERTIGHT SOLID)</div>
+                        <select id="mod-slice-keep">
+                            <option value="pos">Keep Top / Right / Back Half</option>
+                            <option value="neg">Keep Bottom / Left / Front Half</option>
+                            <option value="split">Split into 2 Separate Solid Parts</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 5. TAPER / FLARE -->
+                <div id="mod-pane-taper" class="mod-pane" style="display:none;">
+                    <div class="input-group">
+                        <div class="label-row">TOP WIDTH SCALE X (<span id="mod-taper-x-val">50</span>%)</div>
+                        <input type="range" id="mod-taper-x" min="0" max="2" step="0.05" value="0.5" oninput="document.getElementById('mod-taper-x-val').innerText=Math.round(this.value*100); if(document.getElementById('mod-taper-lock').checked){ document.getElementById('mod-taper-y').value=this.value; document.getElementById('mod-taper-y-val').innerText=Math.round(this.value*100); }">
+                    </div>
+                    <div class="input-group">
+                        <div class="label-row">TOP DEPTH SCALE Y (<span id="mod-taper-y-val">50</span>%)</div>
+                        <input type="range" id="mod-taper-y" min="0" max="2" step="0.05" value="0.5" oninput="document.getElementById('mod-taper-y-val').innerText=Math.round(this.value*100); if(document.getElementById('mod-taper-lock').checked){ document.getElementById('mod-taper-x').value=this.value; document.getElementById('mod-taper-x-val').innerText=Math.round(this.value*100); }">
+                    </div>
+                    <div class="check-row" onclick="document.getElementById('mod-taper-lock').click(); event.stopPropagation();">
+                        <input type="checkbox" id="mod-taper-lock" checked onclick="event.stopPropagation();">
+                        <span>Uniform X & Y Taper</span>
+                    </div>
+                </div>
+
+                <!-- 6. SHEAR / SLANT -->
+                <div id="mod-pane-shear" class="mod-pane" style="display:none;">
+                    <div class="input-group">
+                        <div class="label-row">TOP SLANT X (<span class="unit-text">mm</span>)</div>
+                        <input type="number" id="mod-shear-x" value="5.0" step="1.0">
+                    </div>
+                    <div class="input-group">
+                        <div class="label-row">TOP SLANT Y (<span class="unit-text">mm</span>)</div>
+                        <input type="number" id="mod-shear-y" value="0.0" step="1.0">
+                    </div>
+                </div>
+
+                <!-- 7. TWIST -->
+                <div id="mod-pane-twist" class="mod-pane" style="display:none;">
+                    <div class="input-group">
+                        <div class="label-row">TWIST AXIS</div>
+                        <select id="mod-twist-axis">
+                            <option value="z">Z Axis (Vertical Twist)</option>
+                            <option value="x">X Axis</option>
+                            <option value="y">Y Axis</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <div class="label-row">TWIST ANGLE (deg)</div>
+                        <input type="number" id="mod-twist-angle" value="90" step="15">
+                    </div>
+                </div>
+
+                <!-- 8. BEND / ARC -->
+                <div id="mod-pane-bend" class="mod-pane" style="display:none;">
+                    <div class="input-group">
+                        <div class="label-row">BEND DIRECTION</div>
+                        <select id="mod-bend-dir">
+                            <option value="xy">Horizontal Curve (Nameplate / Badge)</option>
+                            <option value="xz">Vertical Arch (Bridge / Handle)</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <div class="label-row">BEND ANGLE (deg)</div>
+                        <input type="number" id="mod-bend-angle" value="90" step="15">
+                    </div>
+                </div>
+
+                <div class="grid-2" style="margin-top: 15px;">
+                    <button onclick="closeModifyModal()" style="background: #555; border: none;">Cancel</button>
+                    <button onclick="confirmModifyModal()" style="background: #4a90e2; border: none;">Apply</button>
                 </div>
             </div>
         </div>

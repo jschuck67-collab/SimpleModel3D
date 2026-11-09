@@ -11,6 +11,7 @@ import { disposeHierarchy, forceMaterialUpgrade, updateBuildPlate } from './scen
 import { snapToGrid, dropToFloor, setOrigin, alignObjects, performDropToSurface, resetTransform, applyTransform, centerAssemblyOnPlate, checkBuildVolume } from './tools.js';
 import { togglePanel, closeTextModal, closeBevelModal, closeTubeModal, updateLighting } from './ui.js';
 import { saveAutosave, clearAutosave } from './state.js';
+import { applyTaper, applyShear, applyTwist, applyBend, applyHollow, applyPlaneCut, applyFaceExtrude, applyEdgeBevel } from './modifiers.js';
 
 let scene, camera, renderer, orbit, transform, rulerGroup;
 let raycaster = new THREE.Raycaster();
@@ -37,6 +38,8 @@ let currentPrinter = 'bambu';
 let rulerActive = false;
 let rulerPoints = [];
 let dropSurfaceActive = false;
+let extrudePickActive = false;
+let currentModifyTool = 'extrude';
 let isVertexSnapping = false;
 
 let isWireframe = false;
@@ -95,6 +98,10 @@ window.dropToFloor = () => { if (selection.length === 0) return; pushToUndo(); d
 window.centerOnPlate = centerOnPlate;
 window.resetSelectedTransform = resetSelectedTransform;
 window.applySelectedTransform = applySelectedTransform;
+window.openModifyModal = openModifyModal;
+window.closeModifyModal = closeModifyModal;
+window.confirmModifyModal = confirmModifyModal;
+window.startInteractiveExtrudePick = startInteractiveExtrudePick;
 window.toggleKeymap = toggleKeymap;
 window.unhideAll = unhideAll;
 window.toggleSpace = toggleSpace;
@@ -271,7 +278,7 @@ function init() {
             closeContextMenu();
         }
         pointerDownPosition.set(e.clientX, e.clientY);
-        if (e.button === 0 && !e.altKey && !transform.dragging && transform.axis === null && !rulerActive && !dropSurfaceActive && !e.target.closest('.panel') && !e.target.closest('#compass-div') && !e.target.closest('#context-menu')) {
+        if (e.button === 0 && !e.altKey && !transform.dragging && transform.axis === null && !rulerActive && !dropSurfaceActive && !extrudePickActive && !e.target.closest('.panel') && !e.target.closest('#compass-div') && !e.target.closest('#context-menu')) {
             marqueeCandidate = true;
             marqueeStart.set(e.clientX, e.clientY);
             marqueeElem.style.left = e.clientX + 'px';
@@ -291,7 +298,7 @@ function init() {
     window.addEventListener('pointermove', (e) => {
         mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-        document.body.style.cursor = (rulerActive || dropSurfaceActive) ? 'crosshair' : (transform.axis ? 'pointer' : 'default');
+        document.body.style.cursor = (rulerActive || dropSurfaceActive || extrudePickActive) ? 'crosshair' : (transform.axis ? 'pointer' : 'default');
         if (marqueeCandidate && !isMarquee) {
             if (Math.hypot(e.clientX - marqueeStart.x, e.clientY - marqueeStart.y) > 4) {
                 isMarquee = true;
@@ -435,6 +442,165 @@ function selectAll() {
         }
     });
     updateOutliner();
+    updateSelectionStatus();
+}
+
+// --- DEFORM & MODIFY TOOLS ---
+function replaceObjectInScene(oldMesh, newMeshes) {
+    const parent = oldMesh.parent || scene;
+    const wasSelected = selection.includes(oldMesh);
+    if (oldMesh.parent) oldMesh.parent.remove(oldMesh);
+    disposeHierarchy(oldMesh);
+    objects = objects.filter(o => o !== oldMesh);
+    selection = selection.filter(o => o !== oldMesh);
+
+    const added = [];
+    newMeshes.forEach(m => {
+        if (!m) return;
+        m.userData.randomColor = generateRandomColor();
+        updateObjectVisuals(m);
+        parent.add(m);
+        if (parent === scene) objects.push(m);
+        added.push(m);
+    });
+
+    if (wasSelected && added.length > 0) {
+        added.forEach(m => selectObject(m, true));
+    }
+    refreshSelectionHelpers();
+    refreshTransformAttachment();
+    updateOutliner();
+}
+
+function openModifyModal(tool) {
+    if (selection.length === 0) return alert("Select a mesh object first!");
+    const target = selection[selection.length - 1];
+    if (!target.isMesh) return alert("Please select a mesh object (ungroup groups first).");
+    if (target.userData.locked) return alert("Selected object is locked!");
+
+    currentModifyTool = tool;
+    extrudePickActive = false;
+    const btnExtrude = document.getElementById('tool-extrude');
+    if (btnExtrude) btnExtrude.classList.remove('active-tool');
+
+    const titles = {
+        extrude: 'Face Extrude / Inset (E)',
+        bevel: 'Edge Bevel / 45° Chamfer',
+        hollow: 'Hollow / Shell Maker',
+        slice: 'Solid Plane Cut / Slice',
+        taper: 'Taper / Flare Deform',
+        shear: 'Shear / Slant Deform',
+        twist: 'Spiral Twist Deform',
+        bend: 'Bend / Arc Deform'
+    };
+    document.getElementById('modify-modal-title').innerText = titles[tool] || 'Deform & Modify';
+    document.querySelectorAll('.mod-pane').forEach(el => { el.style.display = 'none'; });
+    const pane = document.getElementById(`mod-pane-${tool}`);
+    if (pane) pane.style.display = 'block';
+
+    // Auto-select Cylinder profile in Bevel modal if object name suggests a cylinder/tube
+    if (tool === 'bevel') {
+        const nameLower = (target.name || '').toLowerCase();
+        const shapeSel = document.getElementById('mod-bevel-shape');
+        if (shapeSel) {
+            shapeSel.value = (nameLower.includes('cylinder') || nameLower.includes('cone') || nameLower.includes('dome')) ? 'cylinder' : 'box';
+        }
+    }
+
+    document.getElementById('modify-modal').classList.remove('hidden');
+}
+
+function closeModifyModal() {
+    document.getElementById('modify-modal').classList.add('hidden');
+}
+
+function startInteractiveExtrudePick() {
+    closeModifyModal();
+    extrudePickActive = true;
+    rulerActive = false;
+    dropSurfaceActive = false;
+    transform.detach();
+    const btnExtrude = document.getElementById('tool-extrude');
+    if (btnExtrude) btnExtrude.classList.add('active-tool');
+    document.getElementById('status-text').innerText = "🎯 Click any face on the selected object to Extrude/Inset (Esc to cancel)";
+}
+
+function confirmModifyModal() {
+    if (selection.length === 0) { closeModifyModal(); return; }
+    const target = selection[selection.length - 1];
+    if (!target.isMesh || target.userData.locked) { closeModifyModal(); return; }
+
+    pushToUndo();
+    try {
+        if (currentModifyTool === 'extrude') {
+            const face = document.getElementById('mod-extrude-face').value;
+            const inset = fromDisplay(parseFloat(document.getElementById('mod-extrude-inset').value) || 0, currentUnit);
+            const dist = fromDisplay(parseFloat(document.getElementById('mod-extrude-dist').value) || 0, currentUnit);
+            const profile = document.getElementById('mod-extrude-profile').value;
+            const res = applyFaceExtrude(target, face, dist, inset, profile, isWireframe);
+            if (res) {
+                replaceObjectInScene(target, [res]);
+                document.getElementById('status-text').innerText = dist >= 0 ? "Face extruded outward" : "Face pocket carved inward";
+            }
+        } else if (currentModifyTool === 'bevel') {
+            const style = document.getElementById('mod-bevel-style').value;
+            const shape = document.getElementById('mod-bevel-shape').value;
+            const width = fromDisplay(parseFloat(document.getElementById('mod-bevel-width').value) || 1, currentUnit);
+            applyEdgeBevel(target, width, style, shape);
+            updateObjectVisuals(target);
+            refreshSelectionHelpers();
+            updateInspectorUI(target);
+            document.getElementById('status-text').innerText = style === 'chamfer' ? "Applied 45° Chamfer" : "Applied Round Bevel";
+        } else if (currentModifyTool === 'hollow') {
+            const mode = document.getElementById('mod-hollow-mode').value;
+            const wall = fromDisplay(parseFloat(document.getElementById('mod-hollow-wall').value) || 2, currentUnit);
+            const res = applyHollow(target, wall, mode, isWireframe);
+            if (res) {
+                replaceObjectInScene(target, [res]);
+                document.getElementById('status-text').innerText = "Object hollowed cleanly";
+            }
+        } else if (currentModifyTool === 'slice') {
+            const plane = document.getElementById('mod-slice-plane').value;
+            const keep = document.getElementById('mod-slice-keep').value;
+            const parts = applyPlaneCut(target, plane, keep, isWireframe);
+            if (parts.length > 0) {
+                replaceObjectInScene(target, parts);
+                document.getElementById('status-text').innerText = keep === 'split' ? "Split into 2 solid objects" : "Object sliced solid";
+            }
+        } else if (currentModifyTool === 'taper') {
+            const tx = parseFloat(document.getElementById('mod-taper-x').value);
+            const ty = parseFloat(document.getElementById('mod-taper-y').value);
+            applyTaper(target, isNaN(tx) ? 0.5 : tx, isNaN(ty) ? 0.5 : ty);
+            refreshSelectionHelpers();
+            updateInspectorUI(target);
+            document.getElementById('status-text').innerText = "Applied Taper deform";
+        } else if (currentModifyTool === 'shear') {
+            const sx = fromDisplay(parseFloat(document.getElementById('mod-shear-x').value) || 0, currentUnit);
+            const sy = fromDisplay(parseFloat(document.getElementById('mod-shear-y').value) || 0, currentUnit);
+            applyShear(target, sx, sy);
+            refreshSelectionHelpers();
+            updateInspectorUI(target);
+            document.getElementById('status-text').innerText = "Applied Shear / Slant";
+        } else if (currentModifyTool === 'twist') {
+            const axis = document.getElementById('mod-twist-axis').value;
+            const angle = parseFloat(document.getElementById('mod-twist-angle').value) || 90;
+            applyTwist(target, angle, axis);
+            refreshSelectionHelpers();
+            updateInspectorUI(target);
+            document.getElementById('status-text').innerText = `Twisted ${angle}° around ${axis.toUpperCase()}`;
+        } else if (currentModifyTool === 'bend') {
+            const dir = document.getElementById('mod-bend-dir').value;
+            const angle = parseFloat(document.getElementById('mod-bend-angle').value) || 90;
+            applyBend(target, angle, dir);
+            refreshSelectionHelpers();
+            updateInspectorUI(target);
+            document.getElementById('status-text').innerText = `Bent ${angle}°`;
+        }
+    } catch (err) {
+        console.error("Modify operation failed:", err);
+        alert("Could not apply operation on this geometry.");
+    }
+    closeModifyModal();
     updateSelectionStatus();
 }
 
@@ -1332,6 +1498,31 @@ function onPointerUp(event) {
         return;
     }
 
+    if (extrudePickActive) {
+        raycaster.setFromCamera(mouse, camera);
+        const target = selection[selection.length - 1];
+        if (target && target.isMesh) {
+            const intersects = raycaster.intersectObject(target, true);
+            if (intersects.length > 0 && intersects[0].face) {
+                const hit = intersects[0];
+                const inset = fromDisplay(parseFloat(document.getElementById('mod-extrude-inset').value) || 0, currentUnit);
+                const dist = fromDisplay(parseFloat(document.getElementById('mod-extrude-dist').value) || 0, currentUnit);
+                const profile = document.getElementById('mod-extrude-profile').value;
+                pushToUndo();
+                const res = applyFaceExtrude(target, { point: hit.point, normal: hit.face.normal }, dist, inset, profile, isWireframe);
+                if (res) {
+                    replaceObjectInScene(target, [res]);
+                    document.getElementById('status-text').innerText = dist >= 0 ? "Extruded clicked face!" : "Carved pocket on clicked face!";
+                }
+            }
+        }
+        extrudePickActive = false;
+        const btnExtrude = document.getElementById('tool-extrude');
+        if (btnExtrude) btnExtrude.classList.remove('active-tool');
+        refreshTransformAttachment();
+        return;
+    }
+
     if (dropSurfaceActive) {
         raycaster.setFromCamera(mouse, camera);
         
@@ -2051,6 +2242,14 @@ function openContextMenu(e) {
         handleDropButton();
         return;
     }
+    if (extrudePickActive) {
+        extrudePickActive = false;
+        const btnExtrude = document.getElementById('tool-extrude');
+        if (btnExtrude) btnExtrude.classList.remove('active-tool');
+        refreshTransformAttachment();
+        updateSelectionStatus();
+        return;
+    }
 
     // Raycast at right-click cursor to select an object under the cursor if not already selected
     mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -2115,6 +2314,13 @@ function openContextMenu(e) {
             addItem('Boolean Subtract', '', () => performBoolean('subtract'));
             addItem('Boolean Union', '', () => performBoolean('union'));
             addItem('Swap Base / Cutter ⇄', '', () => swapBooleanOrder());
+        }
+        if (last.isMesh) {
+            addDivider();
+            addItem('Extrude / Inset Face...', 'E', () => openModifyModal('extrude'));
+            addItem('Bevel / 45° Chamfer...', 'Ctrl+B', () => openModifyModal('bevel'));
+            addItem('Hollow / Shell...', '', () => openModifyModal('hollow'));
+            addItem('Plane Cut / Slice...', '', () => openModifyModal('slice'));
         }
         addDivider();
         addItem('Set Origin to Center', '', () => window.setOrigin('center'));
@@ -2209,8 +2415,16 @@ function openApplyMenu() {
 function onKeyDown(e) { 
     if (e.key === 'Escape') {
         closeContextMenu();
+        closeModifyModal();
         if (rulerActive) handleRulerButton();
         if (dropSurfaceActive) handleDropButton();
+        if (extrudePickActive) {
+            extrudePickActive = false;
+            const btnExtrude = document.getElementById('tool-extrude');
+            if (btnExtrude) btnExtrude.classList.remove('active-tool');
+            refreshTransformAttachment();
+            updateSelectionStatus();
+        }
         return;
     }
     if(['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return; 
@@ -2227,6 +2441,7 @@ function onKeyDown(e) {
 
     if (e.ctrlKey || e.metaKey) {
         if (key === 'a') { e.preventDefault(); openApplyMenu(); return; }
+        if (key === 'b') { e.preventDefault(); openModifyModal('bevel'); return; }
         if (key === 'g') { e.preventDefault(); groupSelected(); return; }
         if (key === '1') { e.preventDefault(); setView('back'); return; }
         if (key === '3') { e.preventDefault(); setView('left'); return; }
@@ -2235,6 +2450,7 @@ function onKeyDown(e) {
 
     if (!e.ctrlKey && !e.metaKey && !e.altKey) {
         if (key === 'a') { selectAll(); return; }
+        if (key === 'e') { openModifyModal('extrude'); return; }
         if (key === 'm') setToolMode('translate'); 
         if (key === 'g') {
             if (keymapMode === 'blender') setToolMode('translate');
