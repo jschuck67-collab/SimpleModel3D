@@ -1168,7 +1168,7 @@ function frameAll() {
 // --- NEW SCENE LOGIC ---
 function addDefaultCube() {
     const geo = createBasicGeometry('box');
-    const mat = new THREE.MeshPhysicalMaterial({ color: 0xcccccc, roughness: 0.55, metalness: 0.05, transmission: 0, ior: 1.5, thickness: 0, wireframe: isWireframe, side: THREE.DoubleSide });
+    const mat = new THREE.MeshPhysicalMaterial({ color: 0xcccccc, roughness: 0.45, metalness: 0.1, transmission: 0, ior: 1.5, thickness: 0, wireframe: isWireframe, side: THREE.DoubleSide });
     const mesh = new THREE.Mesh(geo, mat);
     const size = getLocalSize(mesh);
     mesh.position.set(0, 0, size.z / 2);
@@ -1385,7 +1385,7 @@ function handleSTLImport(e) {
         geo.computeBoundingSphere();
         if (!geo.attributes.normal) geo.computeVertexNormals();
 
-        const mat = new THREE.MeshPhysicalMaterial({ color: 0xcccccc, roughness: 0.55, metalness: 0.05, transmission: 0, ior: 1.5, thickness: 0, wireframe: isWireframe, side: THREE.DoubleSide });
+        const mat = new THREE.MeshPhysicalMaterial({ color: 0xcccccc, roughness: 0.45, metalness: 0.1, transmission: 0, ior: 1.5, thickness: 0, wireframe: isWireframe, side: THREE.DoubleSide });
         const mesh = new THREE.Mesh(geo, mat);
         mesh.userData.trueColor = 0xcccccc;
         mesh.userData.opacity = 1;
@@ -1418,7 +1418,7 @@ function handleSVGImport(e) {
         const svgData = loader.parse(ev.target.result);
         const paths = svgData.paths;
         const group = new THREE.Group();
-        const mat = new THREE.MeshPhysicalMaterial({ color: 0xcccccc, roughness: 0.55, metalness: 0.05, transmission: 0, ior: 1.5, thickness: 0, wireframe: isWireframe, side: THREE.DoubleSide });
+        const mat = new THREE.MeshPhysicalMaterial({ color: 0xcccccc, roughness: 0.45, metalness: 0.1, transmission: 0, ior: 1.5, thickness: 0, wireframe: isWireframe, side: THREE.DoubleSide });
 
         for ( let i = 0; i < paths.length; i ++ ) {
             const path = paths[ i ];
@@ -1503,7 +1503,7 @@ function createShape(type) {
 
     pushToUndo();
     const geo = createBasicGeometry(type);
-    const mat = new THREE.MeshPhysicalMaterial({ color: 0xcccccc, roughness: 0.55, metalness: 0.05, transmission: 0, ior: 1.5, thickness: 0, wireframe: isWireframe, side: THREE.DoubleSide });
+    const mat = new THREE.MeshPhysicalMaterial({ color: 0xcccccc, roughness: 0.45, metalness: 0.1, transmission: 0, ior: 1.5, thickness: 0, wireframe: isWireframe, side: THREE.DoubleSide });
     const mesh = new THREE.Mesh(geo, mat);
     const size = getLocalSize(mesh);
     mesh.position.set(0, 0, size.z / 2); 
@@ -1535,7 +1535,7 @@ function confirmTubeShape() {
     pushToUndo();
 
     const geo = createTubeGeometry(outerR, innerR, height, segments);
-    const mat = new THREE.MeshPhysicalMaterial({ color: 0xcccccc, roughness: 0.55, metalness: 0.05, transmission: 0, ior: 1.5, thickness: 0, wireframe: isWireframe, side: THREE.DoubleSide });
+    const mat = new THREE.MeshPhysicalMaterial({ color: 0xcccccc, roughness: 0.45, metalness: 0.1, transmission: 0, ior: 1.5, thickness: 0, wireframe: isWireframe, side: THREE.DoubleSide });
     const mesh = new THREE.Mesh(geo, mat);
     const size = getLocalSize(mesh);
     mesh.position.set(0, 0, size.z / 2);
@@ -1568,7 +1568,7 @@ function confirmTextShape() {
         geo.computeBoundingBox();
         geo.computeBoundingSphere();
         
-        const mat = new THREE.MeshPhysicalMaterial({ color: 0xcccccc, roughness: 0.55, metalness: 0.05, transmission: 0, ior: 1.5, thickness: 0, wireframe: isWireframe, side: THREE.DoubleSide });
+        const mat = new THREE.MeshPhysicalMaterial({ color: 0xcccccc, roughness: 0.45, metalness: 0.1, transmission: 0, ior: 1.5, thickness: 0, wireframe: isWireframe, side: THREE.DoubleSide });
         const mesh = new THREE.Mesh(geo, mat);
         const textSize = getLocalSize(mesh);
         mesh.position.set(0, 0, textSize.z / 2);
@@ -1600,7 +1600,7 @@ function confirmBevelShape() {
     const geo = createBevelGeometry(type, size, segments);
     let name = "Beveled " + (type === 'box' ? "Cube" : "Cylinder");
     
-    const mat = new THREE.MeshPhysicalMaterial({ color: 0xcccccc, roughness: 0.55, metalness: 0.05, transmission: 0, ior: 1.5, thickness: 0, wireframe: isWireframe, side: THREE.DoubleSide });
+    const mat = new THREE.MeshPhysicalMaterial({ color: 0xcccccc, roughness: 0.45, metalness: 0.1, transmission: 0, ior: 1.5, thickness: 0, wireframe: isWireframe, side: THREE.DoubleSide });
     const mesh = new THREE.Mesh(geo, mat);
     
     mesh.position.set(0, 0, 1); 
@@ -2334,11 +2334,11 @@ function updateObjectFromUI(e) {
                 c.userData.opacity = pickedOpacity; 
                 c.userData.materialType = pickedMat;
                 if (pickedMat === 'metal') {
-                    c.material.roughness = 0.35; c.material.metalness = 0.7; c.material.transmission = 0; c.material.thickness = 0;
+                    c.material.roughness = 0.25; c.material.metalness = 0.85; c.material.transmission = 0; c.material.thickness = 0;
                 } else if (pickedMat === 'glass') {
-                    c.material.roughness = 0.15; c.material.metalness = 0.05; c.material.transmission = 0.85; c.material.ior = 1.45; c.material.thickness = 1.2;
+                    c.material.roughness = 0.1; c.material.metalness = 0.05; c.material.transmission = 0.9; c.material.ior = 1.5; c.material.thickness = 1.5;
                 } else { // matte
-                    c.material.roughness = 0.55; c.material.metalness = 0.05; c.material.transmission = 0; c.material.thickness = 0;
+                    c.material.roughness = 0.45; c.material.metalness = 0.1; c.material.transmission = 0; c.material.thickness = 0;
                 }
             } 
         });

@@ -79,11 +79,11 @@ export function executeBoolean(meshA, meshBOrList, op, isWireframe) {
 
     const mat = new THREE.MeshPhysicalMaterial({
         color: trueColor,
-        roughness: matType === 'metal' ? 0.35 : matType === 'glass' ? 0.15 : 0.55,
-        metalness: matType === 'metal' ? 0.70 : matType === 'glass' ? 0.05 : 0.05,
-        transmission: matType === 'glass' ? 0.85 : 0,
-        ior: 1.45,
-        thickness: matType === 'glass' ? 1.2 : 0,
+        roughness: matType === 'metal' ? 0.25 : matType === 'glass' ? 0.1 : 0.45,
+        metalness: matType === 'metal' ? 0.85 : matType === 'glass' ? 0.05 : 0.1,
+        transmission: matType === 'glass' ? 0.9 : 0,
+        ior: 1.5,
+        thickness: matType === 'glass' ? 1.5 : 0,
         transparent: opacity < 1 || matType === 'glass',
         opacity: opacity,
         wireframe: isWireframe,
