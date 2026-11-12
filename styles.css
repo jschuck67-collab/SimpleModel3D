@@ -77,8 +77,11 @@ button:hover { background: #666; }
 .inline-row select { flex: 1; margin-bottom: 0; }
 
 .btn-bool { background: #444; border-left: 2px solid #e67e22; }
-.btn-cutter { background: #444; border-left: 2px solid #ff4757; }
-.btn-cutter.active { background: #c0392b !important; border-color: #ff4757 !important; color: white; }
+.btn-bool-union:hover { background: #27ae60 !important; border-color: #2ecc71 !important; color: white; }
+.btn-bool-sub:hover { background: #c0392b !important; border-color: #ff4757 !important; color: white; }
+.btn-bool-inter:hover { background: #8e44ad !important; border-color: #a55eea !important; color: white; }
+.btn-cutter { background: #444; border-left: 2px solid #ff9f1a; }
+.btn-cutter.active { background: #d35400 !important; border-color: #ff9f1a !important; color: white; }
 .btn-keymap { border-left: 2px solid #f39c12; }
 .btn-keymap.active { background: #d35400 !important; border-color: #e67e22 !important; color: white; }
 .btn-snap { border-left: 2px solid #9b59b6; }
@@ -279,4 +282,88 @@ input[type="color"].disabled { opacity: 0.3; pointer-events: none; }
     height: 128px;
     z-index: 100;
     cursor: pointer;
+}
+
+/* EDIT MODE TOP HUD BAR & LIVE DRAG READOUT BADGE */
+#edit-mode-bar {
+    position: absolute;
+    top: 44px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    z-index: 105;
+    pointer-events: auto;
+    user-select: none;
+}
+
+.mode-pill-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(38, 38, 38, 0.92);
+    border: 1px solid #555;
+    border-radius: 999px;
+    padding: 3px 6px;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.45);
+}
+
+.mode-pill-group.hidden {
+    display: none !important;
+}
+
+.mode-pill-btn {
+    width: auto;
+    margin: 0;
+    padding: 4px 10px;
+    font-size: 0.72rem;
+    font-weight: bold;
+    border-radius: 999px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: #ccc;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.mode-pill-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.mode-pill-btn.active {
+    background: #e67e22;
+    border-color: #f39c12;
+    color: #fff;
+}
+
+#mode-btn-object.active {
+    background: #4a90e2;
+    border-color: #357abd;
+    color: #fff;
+}
+
+.mode-sep {
+    color: #666;
+    font-size: 0.75rem;
+    padding: 0 2px;
+}
+
+#edit-drag-badge {
+    position: absolute;
+    display: none;
+    background: rgba(230, 126, 34, 0.95);
+    color: #fff;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    font-family: monospace;
+    border: 1px solid #fff;
+    pointer-events: none;
+    z-index: 250;
+    white-space: nowrap;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
 }

@@ -9,9 +9,10 @@ import { executeBoolean } from './booleanOps.js';
 import { createBasicGeometry, createBevelGeometry, createTubeGeometry, loadTextGeometry } from './shapes.js';
 import { disposeHierarchy, forceMaterialUpgrade, updateBuildPlate } from './scene.js';
 import { snapToGrid, dropToFloor, setOrigin, alignObjects, performDropToSurface, resetTransform, applyTransform, centerAssemblyOnPlate, checkBuildVolume } from './tools.js';
-import { togglePanel, closeTextModal, closeBevelModal, closeTubeModal, updateLighting } from './ui.js';
+import { togglePanel, closeTextModal, closeBevelModal, closeTubeModal, updateLighting, toggleLightingMode } from './ui.js';
 import { saveAutosave, clearAutosave } from './state.js';
 import { applyTaper, applyShear, applyTwist, applyBend, applyHollow, applyPlaneCut, applyFaceExtrude, applyEdgeBevel } from './modifiers.js';
+import { initEditMode, isEditModeActive, getEditMesh, getEditProxy, getEditSubMode, getEditActionMode, enterEditMode, exitEditMode, setEditSubMode, setEditActionMode, rebuildEditTopology, pickEditFeature, updateEditHover, selectEditFeature, beginEditGizmoDrag, updateEditGizmoDrag, endEditGizmoDrag } from './editMode.js';
 
 let scene, camera, renderer, orbit, transform, rulerGroup;
 let raycaster = new THREE.Raycaster();
@@ -52,11 +53,13 @@ let isSnapping = false;
 let currentSpace = 'world';
 let keymapMode = 'cad'; // 'cad' or 'blender'
 let inspectorEditCommitted = false;
+let booleanHoverOp = null; // 'union' | 'subtract' | 'intersect' | null
 
 window.createShape = createShape;
 window.performBoolean = performBoolean;
 window.toggleCutterMode = toggleCutterMode;
 window.swapBooleanOrder = swapBooleanOrder;
+window.setBooleanHoverOp = setBooleanHoverOp;
 window.mirrorSelected = mirrorSelected;
 window.groupSelected = groupSelected;
 window.alignObjects = (axis, type) => { if (selection.length < 2) return alert("Select at least 2 objects to align."); pushToUndo(); alignObjects(selection, axis, type); updateInspectorUI(selection[selection.length - 1]); document.getElementById('status-text').innerText = `Aligned ${axis.toUpperCase()} to ${type}`; };
@@ -71,6 +74,7 @@ window.updateObjectFromUI = updateObjectFromUI;
 window.handleDropButton = handleDropButton;
 window.toggleTheme = toggleTheme;
 window.updateLighting = (val) => updateLighting(val, scene);
+window.toggleLightingMode = () => toggleLightingMode(scene);
 window.toggleDimensions = toggleDimensions;
 window.exportSTL = () => exportSTL(objects.filter(o => o.visible));
 window.exportSelectedSTL = () => { if (selection.length > 0) exportSTL(selection); else alert('Select objects to export!'); };
@@ -102,6 +106,10 @@ window.openModifyModal = openModifyModal;
 window.closeModifyModal = closeModifyModal;
 window.confirmModifyModal = confirmModifyModal;
 window.startInteractiveExtrudePick = startInteractiveExtrudePick;
+window.toggleEditMode = toggleEditMode;
+window.isEditMode = isEditModeActive;
+window.switchEditSubMode = switchEditSubMode;
+window.switchEditActionMode = switchEditActionMode;
 window.toggleKeymap = toggleKeymap;
 window.unhideAll = unhideAll;
 window.toggleSpace = toggleSpace;
@@ -128,6 +136,7 @@ function init() {
     orbit = setup.orbit;
     transform = setup.transform;
     rulerGroup = setup.rulerGroup;
+    initEditMode(scene);
     
     renderer.autoClear = false;
     clock = new THREE.Clock();
@@ -162,8 +171,26 @@ function init() {
     compassDiv.addEventListener('pointerdown', (e) => e.stopPropagation());
     compassDiv.addEventListener('pointerup', (e) => { e.stopPropagation(); viewHelper.handleClick(e); });
 
-    transform.addEventListener('mouseDown', () => pushToUndo());
+    transform.addEventListener('mouseDown', () => {
+        pushToUndo();
+        if (isEditModeActive()) {
+            beginEditGizmoDrag();
+        }
+    });
     transform.addEventListener('mouseUp', () => {
+        if (isEditModeActive()) {
+            const res = endEditGizmoDrag();
+            if (res === 'switched_to_extrude') {
+                switchEditActionMode('extrude');
+                document.getElementById('status-text').innerText = "Inset complete! Now drag Gizmo to Extrude out or in";
+            } else if (res === 'bevel_complete') {
+                transform.detach();
+                document.getElementById('status-text').innerText = "Edge Bevel complete! Click another Edge to Bevel or choose an Action";
+            }
+            refreshSelectionHelpers();
+            if (selection.length > 0) updateInspectorUI(selection[selection.length - 1]);
+            return;
+        }
         if (selection.length > 0) {
             updateInspectorUI(selection[selection.length - 1]);
             updateSelectionStatus();
@@ -171,6 +198,14 @@ function init() {
     });
     transform.addEventListener('dragging-changed', (e) => orbit.enabled = !e.value);
     transform.addEventListener('change', () => { 
+        if (isEditModeActive()) {
+            if (transform.dragging) {
+                updateEditGizmoDrag(camera, currentUnit);
+                refreshSelectionHelpers();
+                if (selection.length > 0) updateInspectorUI(selection[selection.length - 1]);
+            }
+            return;
+        }
         // LIVE DRAG VERTEX SNAPPING 
         if (transform.dragging && transform.mode === 'translate' && isVertexSnapping && selection.length > 0) {
             raycaster.setFromCamera(mouse, camera);
@@ -260,13 +295,22 @@ function init() {
     renderer.domElement.addEventListener('pointerdown', (e) => {
         if (e.button === 1) {
             e.preventDefault();
-            if (e.ctrlKey || e.metaKey) orbit.mouseButtons.MIDDLE = THREE.MOUSE.DOLLY;
-            else orbit.mouseButtons.MIDDLE = THREE.MOUSE.ROTATE;
+            if (e.ctrlKey || e.metaKey) {
+                orbit.mouseButtons.MIDDLE = THREE.MOUSE.DOLLY;
+            } else {
+                // When rotating the view with MMB (without Shift pan), exit Orthographic back to User Perspective
+                if (!e.shiftKey && isOrtho) toggleCamera();
+                orbit.mouseButtons.MIDDLE = THREE.MOUSE.ROTATE;
+            }
         } else if (e.button === 0) {
             if (e.altKey) {
                 // Blender "Emulate 3 Button Mouse" (Alt + LMB = Orbit, Shift + Alt + LMB = Pan, Ctrl + Alt + LMB = Zoom)
-                if (e.ctrlKey || e.metaKey) orbit.mouseButtons.LEFT = THREE.MOUSE.DOLLY;
-                else orbit.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
+                if (e.ctrlKey || e.metaKey) {
+                    orbit.mouseButtons.LEFT = THREE.MOUSE.DOLLY;
+                } else {
+                    if (!e.shiftKey && isOrtho) toggleCamera();
+                    orbit.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
+                }
             } else {
                 orbit.mouseButtons.LEFT = null;
             }
@@ -278,7 +322,7 @@ function init() {
             closeContextMenu();
         }
         pointerDownPosition.set(e.clientX, e.clientY);
-        if (e.button === 0 && !e.altKey && !transform.dragging && transform.axis === null && !rulerActive && !dropSurfaceActive && !extrudePickActive && !e.target.closest('.panel') && !e.target.closest('#compass-div') && !e.target.closest('#context-menu')) {
+        if (e.button === 0 && !e.altKey && !isEditModeActive() && !transform.dragging && transform.axis === null && !rulerActive && !dropSurfaceActive && !extrudePickActive && !e.target.closest('.panel') && !e.target.closest('#compass-div') && !e.target.closest('#context-menu') && !e.target.closest('#edit-mode-bar')) {
             marqueeCandidate = true;
             marqueeStart.set(e.clientX, e.clientY);
             marqueeElem.style.left = e.clientX + 'px';
@@ -299,6 +343,9 @@ function init() {
         mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
         document.body.style.cursor = (rulerActive || dropSurfaceActive || extrudePickActive) ? 'crosshair' : (transform.axis ? 'pointer' : 'default');
+        if (isEditModeActive() && !transform.dragging) {
+            updateEditHover(raycaster, mouse, camera);
+        }
         if (marqueeCandidate && !isMarquee) {
             if (Math.hypot(e.clientX - marqueeStart.x, e.clientY - marqueeStart.y) > 4) {
                 isMarquee = true;
@@ -435,6 +482,7 @@ function applySelectedTransform(type) {
 }
 
 function selectAll() {
+    if (isEditModeActive()) return;
     deselectAll(true);
     objects.forEach(obj => {
         if (obj.visible && !obj.userData.locked) {
@@ -443,6 +491,118 @@ function selectAll() {
     });
     updateOutliner();
     updateSelectionStatus();
+}
+
+// --- DIRECT CAD / BLENDER EDIT MODE (TAB) ---
+function updateEditModeUI() {
+    const active = isEditModeActive();
+    const leftBtn = document.getElementById('btn-edit-mode-left');
+    const subTools = document.getElementById('edit-subtools');
+
+    if (leftBtn) {
+        leftBtn.classList.toggle('active-tool', active);
+        leftBtn.innerText = active ? "✏️ Exit Edit Mode (Tab)" : "✏️ Direct Edit Mode (Tab)";
+    }
+    if (subTools) subTools.classList.toggle('hidden', !active);
+
+    if (active) {
+        const am = getEditActionMode();
+        ['move', 'extrude', 'inset', 'bevel'].forEach(m => {
+            const b = document.getElementById(`actmode-${m}`);
+            if (b) b.classList.toggle('active', m === am);
+        });
+
+        // Filter selection types to only show what the active action can modify:
+        // Pull / Move works on Vertices, Edges, and Faces;
+        // Extrude and Inset only work on Faces;
+        // Bevel only works on Edges.
+        const btnVert = document.getElementById('submode-vertex');
+        const btnEdge = document.getElementById('submode-edge');
+        const btnFace = document.getElementById('submode-face');
+        if (btnVert) btnVert.style.display = (am === 'move') ? '' : 'none';
+        if (btnEdge) btnEdge.style.display = (am === 'move' || am === 'bevel') ? '' : 'none';
+        if (btnFace) btnFace.style.display = (am === 'move' || am === 'extrude' || am === 'inset') ? '' : 'none';
+
+        const sm = getEditSubMode();
+        ['vertex', 'edge', 'face'].forEach(m => {
+            const b = document.getElementById(`submode-${m}`);
+            if (b) b.classList.toggle('active', m === sm);
+        });
+    }
+}
+
+function toggleEditMode(forceState) {
+    const shouldEnter = forceState !== undefined ? forceState : !isEditModeActive();
+    if (shouldEnter) {
+        if (selection.length === 0) return alert("Select a mesh object first to enter Edit Mode (Tab)!");
+        const target = selection[selection.length - 1];
+        if (!target.isMesh) return alert("Edit Mode requires a mesh object (ungroup any group first).");
+        if (target.userData.locked) return alert("Unlock this object before entering Edit Mode.");
+
+        // Keep only the active mesh selected
+        if (selection.length > 1) {
+            selectObject(target, false);
+        }
+        // Hide BoxHelper and EdgeOverlay outline in Edit Mode so feature edges & corner dots are crystal clear
+        selectionHelpers.forEach(h => {
+            h.helper.visible = false;
+            if (h.edgeOverlay) h.edgeOverlay.visible = false;
+        });
+
+        enterEditMode(target, transform, scene);
+        setToolMode('translate');
+        switchEditActionMode('move');
+        switchEditSubMode('face');
+        updateEditModeUI();
+        updateInspectorUI(target);
+        document.getElementById('status-text').innerText = "Edit Mode: Choose an Action and click a Face (3), Edge (2), or Vertex (1)";
+    } else {
+        if (!isEditModeActive()) return;
+        exitEditMode(transform);
+        transform.setSpace(currentSpace);
+        selectionHelpers.forEach(h => {
+            h.helper.visible = true;
+            if (h.edgeOverlay) h.edgeOverlay.visible = true;
+        });
+        refreshSelectionHelpers();
+        refreshTransformAttachment();
+        updateEditModeUI();
+        updateSelectionStatus();
+    }
+}
+
+function switchEditSubMode(mode) {
+    if (!isEditModeActive()) toggleEditMode(true);
+    if (!isEditModeActive()) return;
+    const am = getEditActionMode();
+    if ((am === 'extrude' || am === 'inset') && mode !== 'face') return;
+    if (am === 'bevel' && mode !== 'edge') return;
+    setEditSubMode(mode, transform);
+    updateEditModeUI();
+    const label = mode === 'vertex' ? 'Corner Vertices (1)' : mode === 'edge' ? 'Feature Edges (2)' : 'Polygon Faces (3)';
+    document.getElementById('status-text').innerText = `Edit Mode — Selecting ${label}`;
+}
+
+function switchEditActionMode(mode) {
+    if (!isEditModeActive()) toggleEditMode(true);
+    if (!isEditModeActive()) return;
+    setEditActionMode(mode);
+    if ((mode === 'extrude' || mode === 'inset') && getEditSubMode() !== 'face') {
+        setEditSubMode('face', transform);
+    } else if (mode === 'bevel' && getEditSubMode() !== 'edge') {
+        setEditSubMode('edge', transform);
+    }
+    setToolMode('translate');
+    updateEditModeUI();
+    if (mode === 'extrude') {
+        document.getElementById('status-text').innerText = "Extrude Mode (E): Select a Face & drag the Gizmo in any direction to pull out a new extrusion!";
+    } else if (mode === 'inset') {
+        document.getElementById('status-text').innerText = "Inset Mode (I): Select a Face & drag the Gizmo to step an inner face inward!";
+    } else if (mode === 'bevel') {
+        document.getElementById('status-text').innerText = "Bevel Mode (B): Select an Edge & drag the Gizmo to chamfer/bevel the edge!";
+    } else {
+        document.getElementById('status-text').innerText = "Pull / Move Mode: Drag any Face (3), Edge (2), or Vertex (1) in any direction!";
+    }
 }
 
 // --- DEFORM & MODIFY TOOLS ---
@@ -637,6 +797,7 @@ function unhideAll() {
 }
 
 function refreshTransformAttachment() {
+    if (isEditModeActive()) return;
     transform.detach();
     if (selection.length > 0 && !rulerActive && !dropSurfaceActive) {
         const last = selection[selection.length - 1];
@@ -646,49 +807,65 @@ function refreshTransformAttachment() {
     }
 }
 
-// --- BOOLEAN CUTTER MODE & ORDER HELPER ---
+// --- BOOLEAN X-RAY MODE, HOVER PREVIEW & ORDER HELPER ---
+function getBooleanToolHex() {
+    if (booleanHoverOp === 'union') return 0x2ecc71;     // Green (Add / Combine)
+    if (booleanHoverOp === 'subtract') return 0xff4757;  // Red (Cut / Subtract)
+    if (booleanHoverOp === 'intersect') return 0xa55eea; // Purple (Shared Overlap)
+    return 0xff9f1a;                                     // Neutral Amber X-Ray Tool
+}
+
 function getBooleanPair() {
     if (selection.length < 2) return null;
-    let meshA = selection[0];
-    let meshB = selection[1];
-    // If meshA is marked as a Hole Cutter and meshB is not, automatically use meshB as Base and meshA as Cutter!
-    if (meshA.userData.isCutter && !meshB.userData.isCutter) {
-        meshA = selection[1];
-        meshB = selection[0];
+    // Choose the first non-X-Ray object as Base (or selection[0] if all/none have isCutter)
+    let baseIdx = 0;
+    if (selection[0].userData.isCutter) {
+        const solidIdx = selection.findIndex(o => !o.userData.isCutter);
+        if (solidIdx !== -1) baseIdx = solidIdx;
     }
-    return { meshA, meshB };
+    const meshA = selection[baseIdx];
+    const toolObjs = selection.filter((_, idx) => idx !== baseIdx);
+    const meshB = toolObjs[toolObjs.length - 1];
+    return { meshA, meshB, toolObjs };
+}
+
+function setBooleanHoverOp(op) {
+    booleanHoverOp = op;
+    if (selection.length >= 2) {
+        selection.forEach(o => updateObjectVisuals(o));
+        refreshSelectionHelpers();
+    }
 }
 
 function toggleCutterMode() {
-    if (selection.length === 0) return alert("Select an object to toggle Hole Cutter preview.");
+    if (selection.length === 0) return alert("Select an object to toggle X-Ray mode.");
     pushToUndo();
-    const targetState = !selection[selection.length - 1].userData.isCutter;
-    selection.forEach(obj => {
-        obj.userData.isCutter = targetState;
-        updateObjectVisuals(obj);
-    });
+    // Only toggle X-Ray on the active (last selected) object so Base and Tool never both turn into X-Ray!
+    const activeObj = selection[selection.length - 1];
+    activeObj.userData.isCutter = !activeObj.userData.isCutter;
+    objects.forEach(o => updateObjectVisuals(o));
     refreshSelectionHelpers();
-    updateInspectorUI(selection[selection.length - 1]);
+    updateInspectorUI(activeObj);
     updateOutliner();
     updateSelectionStatus();
 }
 
 function swapBooleanOrder() {
-    if (selection.length < 2) return alert("Select 2 objects (Shift+Click) to swap Base and Cutter order.");
+    if (selection.length < 2) return alert("Select at least 2 objects (Shift+Click) to swap Base and Tool order.");
+    const lastIdx = selection.length - 1;
     const first = selection[0];
-    selection[0] = selection[1];
-    selection[1] = first;
-    // Also swap cutter flags if one of them was marked as a cutter
-    if (selection[0].userData.isCutter !== selection[1].userData.isCutter) {
+    selection[0] = selection[lastIdx];
+    selection[lastIdx] = first;
+    // Also swap X-Ray flags if only one of them was marked as X-Ray
+    if (selection[0].userData.isCutter !== selection[lastIdx].userData.isCutter) {
         const tmp = selection[0].userData.isCutter;
-        selection[0].userData.isCutter = selection[1].userData.isCutter;
-        selection[1].userData.isCutter = tmp;
-        updateObjectVisuals(selection[0]);
-        updateObjectVisuals(selection[1]);
+        selection[0].userData.isCutter = selection[lastIdx].userData.isCutter;
+        selection[lastIdx].userData.isCutter = tmp;
     }
+    objects.forEach(o => updateObjectVisuals(o));
     refreshSelectionHelpers();
     refreshTransformAttachment();
-    updateInspectorUI(selection[selection.length - 1]);
+    updateInspectorUI(selection[lastIdx]);
     updateOutliner();
     updateSelectionStatus();
 }
@@ -698,20 +875,51 @@ function refreshSelectionHelpers() {
         scene.remove(h.helper);
         if (h.helper.geometry) h.helper.geometry.dispose();
         if (h.helper.material) h.helper.material.dispose();
+        if (h.edgeOverlay) {
+            scene.remove(h.edgeOverlay);
+            if (h.edgeOverlay.geometry) h.edgeOverlay.geometry.dispose();
+            if (h.edgeOverlay.material) h.edgeOverlay.material.dispose();
+        }
     });
     selectionHelpers = [];
 
     const pair = getBooleanPair();
+    const toolColor = getBooleanToolHex();
+
     selection.forEach(obj => {
-        let color = 0xffa500; // Default CAD Orange (Base)
-        if (obj.userData.isCutter || (pair && obj === pair.meshB)) {
-            color = 0xff4757; // Cutter Red
-        } else if (pair && obj === pair.meshA) {
-            color = 0x2ecc71; // Base Green when 2+ objects are selected
+        const isBaseInPair = pair && obj === pair.meshA;
+        const isToolInPair = pair && pair.toolObjs.includes(obj);
+
+        let color = 0x00d2d3; // Crisp Cyan for Base / Primary Selection
+        if (isToolInPair || (!isBaseInPair && obj.userData.isCutter)) {
+            color = toolColor;
+        } else if (isBaseInPair) {
+            color = 0x00d2d3; // Solid Base gets Cyan outline
         }
+
         const helper = new THREE.BoxHelper(obj, color);
+        if (isEditModeActive()) helper.visible = false;
         scene.add(helper);
-        selectionHelpers.push({ obj, helper });
+
+        // Add crisp CAD geometry edge outline (and see-through X-Ray wireframe for Tool objects!)
+        let edgeOverlay = null;
+        if (obj.isMesh && obj.geometry && !isEditModeActive()) {
+            const edgesGeo = new THREE.EdgesGeometry(obj.geometry, 15);
+            const isXRayTool = isToolInPair || (!isBaseInPair && obj.userData.isCutter);
+            const edgesMat = new THREE.LineBasicMaterial({
+                color,
+                transparent: true,
+                opacity: isXRayTool ? 0.9 : 0.95,
+                depthTest: !isXRayTool
+            });
+            edgeOverlay = new THREE.LineSegments(edgesGeo, edgesMat);
+            edgeOverlay.renderOrder = isXRayTool ? 890 : 880;
+            obj.updateMatrixWorld(true);
+            obj.matrixWorld.decompose(edgeOverlay.position, edgeOverlay.quaternion, edgeOverlay.scale);
+            scene.add(edgeOverlay);
+        }
+
+        selectionHelpers.push({ obj, helper, edgeOverlay });
     });
 
     const cutterBtn = document.getElementById('cutter-toggle');
@@ -733,10 +941,10 @@ function updateSelectionStatus() {
     }
 
     if (selection.length >= 2) {
-        const { meshA, meshB } = getBooleanPair();
+        const { meshA, toolObjs } = getBooleanPair();
         const nameA = meshA.name || "Obj 1";
-        const nameB = meshB.name || "Obj 2";
-        statusEl.innerText = `Base: ${nameA} | Cutter: ${nameB}`;
+        const toolNames = toolObjs.map(o => o.name || "Tool").join(", ");
+        statusEl.innerText = `Base (Cyan): ${nameA} | Tool (X-Ray): ${toolNames}`;
         return;
     }
 
@@ -755,7 +963,7 @@ function updateSelectionStatus() {
         if (obj.userData.locked) {
             statusEl.innerText = `🔒 ${obj.name || 'Object'} (Locked)`;
         } else if (obj.userData.isCutter) {
-            statusEl.innerText = `👻 Cutter: ${obj.name || 'Object'} (Shift+Click Base)`;
+            statusEl.innerText = `◪ X-Ray: ${obj.name || 'Object'} (Shift+Click Base)`;
         } else {
             statusEl.innerText = `Selected: ${obj.name || 'Object'}`;
         }
@@ -1027,6 +1235,10 @@ function pushToUndo() {
 
 function undo() {
     if (undoStack.length === 0) return;
+    const wasInEditMode = isEditModeActive();
+    const prevSubMode = getEditSubMode();
+    const prevActMode = getEditActionMode();
+    if (wasInEditMode) toggleEditMode(false);
     const selectedUUIDs = selection.map(o => o.uuid);
     
     redoStack.push(captureState());
@@ -1043,12 +1255,21 @@ function undo() {
     const objectsToReselect = [];
     scene.traverse(o => { if (selectedUUIDs.includes(o.uuid) && (objects.includes(o) || o.parent?.isGroup)) objectsToReselect.push(o); });
     objectsToReselect.forEach(o => selectObject(o, true));
+    if (wasInEditMode && selection.length > 0 && selection[selection.length - 1].isMesh) {
+        toggleEditMode(true);
+        switchEditSubMode(prevSubMode);
+        switchEditActionMode(prevActMode);
+    }
     
     document.getElementById('status-text').innerText = "Undo performed";
 }
 
 function redo() {
     if (redoStack.length === 0) return;
+    const wasInEditMode = isEditModeActive();
+    const prevSubMode = getEditSubMode();
+    const prevActMode = getEditActionMode();
+    if (wasInEditMode) toggleEditMode(false);
     const selectedUUIDs = selection.map(o => o.uuid);
     
     undoStack.push(captureState());
@@ -1065,6 +1286,11 @@ function redo() {
     const objectsToReselect = [];
     scene.traverse(o => { if (selectedUUIDs.includes(o.uuid) && (objects.includes(o) || o.parent?.isGroup)) objectsToReselect.push(o); });
     objectsToReselect.forEach(o => selectObject(o, true));
+    if (wasInEditMode && selection.length > 0 && selection[selection.length - 1].isMesh) {
+        toggleEditMode(true);
+        switchEditSubMode(prevSubMode);
+        switchEditActionMode(prevActMode);
+    }
     
     document.getElementById('status-text').innerText = "Redo performed";
 }
@@ -1080,13 +1306,19 @@ function toggleRandomColors() {
 }
 
 function updateObjectVisuals(obj) {
-    const isCutter = !!obj.userData.isCutter;
+    const pair = getBooleanPair();
+    const isBaseInPair = pair && obj === pair.meshA;
+    const isToolInPair = pair && pair.toolObjs.includes(obj);
+    const isXRay = isToolInPair || (!isBaseInPair && !!obj.userData.isCutter);
+    const toolHex = getBooleanToolHex();
+
     obj.traverse(child => {
         if (child.isMesh) {
-            if (isCutter || child.userData.isCutter) {
-                child.material.color.setHex(0xff3344);
-                child.material.opacity = 0.35;
+            if (isXRay || (!isBaseInPair && child.userData.isCutter)) {
+                child.material.color.setHex(toolHex);
+                child.material.opacity = 0.36;
                 child.material.transparent = true;
+                child.material.depthWrite = false;
                 child.material.wireframe = false;
                 child.material.needsUpdate = true;
                 return;
@@ -1102,6 +1334,7 @@ function updateObjectVisuals(obj) {
             const matType = child.userData.materialType || 'matte';
             child.material.opacity = op;
             child.material.transparent = (op < 1 || matType === 'glass');
+            child.material.depthWrite = !(op < 1 || matType === 'glass');
             child.material.wireframe = isWireframe;
             child.material.needsUpdate = true;
         }
@@ -1382,21 +1615,36 @@ function confirmBevelShape() {
 
 function performBoolean(op) {
     if (selection.length < 2) return alert("Select at least 2 meshes (Shift+Click) for Boolean operations.");
-    const { meshA, meshB } = getBooleanPair();
-    if (!meshA.isMesh || !meshB.isMesh) return alert("Boolean operations require meshes. Please ungroup any selected groups first.");
-    if (meshA.userData.locked || meshB.userData.locked) return alert("Cannot perform Boolean on a locked object.");
+    const { meshA, toolObjs } = getBooleanPair();
+    if (!meshA.isMesh || toolObjs.some(t => !t.isMesh)) {
+        return alert("Boolean operations require meshes. Please ungroup any selected groups first.");
+    }
+    if (meshA.userData.locked || toolObjs.some(t => t.userData.locked)) {
+        return alert("Cannot perform Boolean on a locked object.");
+    }
+    const keepTool = !!document.getElementById('bool-keep-tool')?.checked;
+    booleanHoverOp = null;
     pushToUndo();
     try {
-        const mesh = executeBoolean(meshA, meshB, op, isWireframe);
+        const mesh = executeBoolean(meshA, toolObjs, op, isWireframe);
         mesh.userData.randomColor = generateRandomColor();
         mesh.userData.isCutter = false;
         updateObjectVisuals(mesh);
         deselectAll(true);
         if (meshA.parent) meshA.parent.remove(meshA);
-        if (meshB.parent) meshB.parent.remove(meshB);
         disposeHierarchy(meshA);
-        disposeHierarchy(meshB);
-        objects = objects.filter(o => o !== meshA && o !== meshB);
+        objects = objects.filter(o => o !== meshA);
+
+        if (!keepTool) {
+            toolObjs.forEach(t => {
+                if (t.parent) t.parent.remove(t);
+                disposeHierarchy(t);
+            });
+            objects = objects.filter(o => !toolObjs.includes(o));
+        } else {
+            toolObjs.forEach(t => updateObjectVisuals(t));
+        }
+
         scene.add(mesh);
         objects.push(mesh);
         selectObject(mesh, false);
@@ -1412,6 +1660,7 @@ function selectObject(obj, multi) {
     if (!selection.includes(obj)) { 
         selection.push(obj); 
     }
+    objects.forEach(o => updateObjectVisuals(o));
     refreshSelectionHelpers();
     refreshTransformAttachment();
     updateInspectorUI(obj); 
@@ -1421,13 +1670,24 @@ function selectObject(obj, multi) {
 }
 
 function deselectAll(skipUpdate = false) { 
+    if (isEditModeActive()) {
+        exitEditMode(transform);
+        updateEditModeUI();
+    }
+    booleanHoverOp = null;
     selectionHelpers.forEach(h => {
         scene.remove(h.helper);
         if (h.helper.geometry) h.helper.geometry.dispose();
         if (h.helper.material) h.helper.material.dispose();
+        if (h.edgeOverlay) {
+            scene.remove(h.edgeOverlay);
+            if (h.edgeOverlay.geometry) h.edgeOverlay.geometry.dispose();
+            if (h.edgeOverlay.material) h.edgeOverlay.material.dispose();
+        }
     });
     selectionHelpers = [];
     selection = []; 
+    objects.forEach(o => updateObjectVisuals(o));
     transform.detach(); 
     document.getElementById('inspector').classList.add('hidden');
     const cutterBtn = document.getElementById('cutter-toggle');
@@ -1489,8 +1749,30 @@ function onPointerUp(event) {
     // If the mouse moved more than 5 pixels, it was a drag, not a click.
     if (pointerDownPosition.distanceTo(new THREE.Vector2(event.clientX, event.clientY)) > 5) return; 
 
-    if (transform.axis !== null || event.target.closest('.panel') || event.target.tagName === 'SELECT' || event.target.tagName === 'INPUT') return; 
+    if (transform.axis !== null || event.target.closest('.panel') || event.target.closest('#edit-mode-bar') || event.target.tagName === 'SELECT' || event.target.tagName === 'INPUT') return; 
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1; mouse.y = -(event.clientY / window.innerHeight) * 2 + 1; 
+
+    // DIRECT EDIT MODE FEATURE SELECTION (VERTEX / EDGE / FACE)
+    if (isEditModeActive()) {
+        const hit = pickEditFeature(raycaster, mouse, camera);
+        const sel = selectEditFeature(hit, transform);
+        if (sel) {
+            const act = getEditActionMode();
+            const typeName = sel.type.charAt(0).toUpperCase() + sel.type.slice(1);
+            if (sel.type === 'face' && act === 'extrude') {
+                document.getElementById('status-text').innerText = `Face Selected — Drag Gizmo in any direction to Extrude!`;
+            } else if (sel.type === 'face' && act === 'inset') {
+                document.getElementById('status-text').innerText = `Face Selected — Drag Gizmo to Inset face inward!`;
+            } else if (sel.type === 'edge' && act === 'bevel') {
+                document.getElementById('status-text').innerText = `Edge Selected — Drag Gizmo to Bevel / Chamfer edge!`;
+            } else {
+                document.getElementById('status-text').innerText = `${typeName} Selected — Drag Gizmo to Pull/Move (or press E=Extrude, I=Inset, B=Bevel)`;
+            }
+        } else {
+            document.getElementById('status-text').innerText = `Edit Mode: Click a ${getEditSubMode()} on the model`;
+        }
+        return;
+    }
     
     // RULER LOGIC INTERCEPT
     if (rulerActive) {
@@ -1816,7 +2098,7 @@ function updateOutliner() {
             }
 
             const text = document.createElement('span');
-            const icon = obj.isGroup ? "📁 " : (obj.userData.isCutter ? "👻 " : "🧊 ");
+            const icon = obj.isGroup ? "📁 " : (obj.userData.isCutter ? "◪ " : "🧊 ");
             text.innerText = icon + (obj.name || `Object ${index + 1}`);
             text.style.pointerEvents = "none";
             leftDiv.appendChild(text);
@@ -2113,8 +2395,10 @@ function toggleCamera() {
         orthoCamera.zoom = 1;
         orthoCamera.updateProjectionMatrix();
     } else {
+        const h = (orthoCamera.top - orthoCamera.bottom) / (prevCam.zoom || 1);
+        const fov = perspCamera.fov * (Math.PI / 180);
         const dist = prevCam.position.distanceTo(orbit.target) || 50;
-        const newDist = dist / (prevCam.zoom || 1);
+        const newDist = h > 0 ? (h / 2) / Math.tan(fov / 2) : dist / (prevCam.zoom || 1);
         const dir = prevCam.position.clone().sub(orbit.target).normalize();
         
         camera.position.copy(orbit.target).add(dir.multiplyScalar(newDist));
@@ -2309,15 +2593,16 @@ function openContextMenu(e) {
         addItem('Copy', 'Ctrl+C', () => copySelected());
         if (clipboard.length > 0) addItem('Paste', 'Ctrl+V', () => pasteCopied());
         addDivider();
-        addItem(last.userData.isCutter ? 'Disable Hole Cutter 👻' : 'Make Hole Cutter 👻', '', () => toggleCutterMode());
+        addItem(last.userData.isCutter ? 'Disable X-Ray ◪' : 'Enable X-Ray ◪', '', () => toggleCutterMode());
         if (selection.length >= 2) {
             addItem('Boolean Subtract', '', () => performBoolean('subtract'));
             addItem('Boolean Union', '', () => performBoolean('union'));
-            addItem('Swap Base / Cutter ⇄', '', () => swapBooleanOrder());
+            addItem('Boolean Intersect', '', () => performBoolean('intersect'));
+            addItem('Swap Base / Tool ⇄', '', () => swapBooleanOrder());
         }
         if (last.isMesh) {
             addDivider();
-            addItem('Extrude / Inset Face...', 'E', () => openModifyModal('extrude'));
+            addItem(isEditModeActive() ? 'Exit Edit Mode' : 'Enter Direct Edit Mode ✏️', 'Tab', () => toggleEditMode());
             addItem('Bevel / 45° Chamfer...', 'Ctrl+B', () => openModifyModal('bevel'));
             addItem('Hollow / Shell...', '', () => openModifyModal('hollow'));
             addItem('Plane Cut / Slice...', '', () => openModifyModal('slice'));
@@ -2430,6 +2715,32 @@ function onKeyDown(e) {
     if(['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return; 
     const key = e.key.toLowerCase();
 
+    if (e.key === 'Tab') {
+        e.preventDefault();
+        toggleEditMode();
+        return;
+    }
+
+    // 10-Key Numpad ALWAYS controls viewport camera views (both in Object Mode and Edit Mode)
+    if (e.code && e.code.startsWith('Numpad')) {
+        if (e.code === 'Numpad1') { e.preventDefault(); (e.ctrlKey || e.metaKey) ? setView('back') : setView('front'); return; }
+        if (e.code === 'Numpad3') { e.preventDefault(); (e.ctrlKey || e.metaKey) ? setView('left') : setView('right'); return; }
+        if (e.code === 'Numpad7') { e.preventDefault(); (e.ctrlKey || e.metaKey) ? setView('bottom') : setView('top'); return; }
+        if (e.code === 'Numpad5') { e.preventDefault(); toggleCamera(); return; }
+        if (e.code === 'Numpad0' || e.code === 'NumpadDecimal') { e.preventDefault(); frameSelected(); return; }
+    }
+
+    // Top-row numbers above keyboard (Digit1, Digit2, Digit3) select Vertices, Edges, and Faces in Edit Mode
+    if (isEditModeActive() && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (e.code === 'Digit1') { switchEditSubMode('vertex'); return; }
+        if (e.code === 'Digit2') { switchEditSubMode('edge'); return; }
+        if (e.code === 'Digit3') { switchEditSubMode('face'); return; }
+        if (key === 'e') { switchEditActionMode('extrude'); return; }
+        if (key === 'i') { switchEditActionMode('inset'); return; }
+        if (key === 'b') { switchEditActionMode('bevel'); return; }
+        if (key === 'm' || key === 'g') { switchEditActionMode('move'); setToolMode('translate'); return; }
+    }
+
     // Blender-style Reset Transforms (Alt + G / R / S), Deselect All (Alt + A), and Unhide All (Alt + H)
     if (e.altKey) {
         if (key === 'g') { e.preventDefault(); resetSelectedTransform('pos'); return; }
@@ -2441,11 +2752,13 @@ function onKeyDown(e) {
 
     if (e.ctrlKey || e.metaKey) {
         if (key === 'a') { e.preventDefault(); openApplyMenu(); return; }
-        if (key === 'b') { e.preventDefault(); openModifyModal('bevel'); return; }
+        if (key === 'b') {
+            e.preventDefault();
+            if (isEditModeActive()) switchEditActionMode('bevel');
+            else openModifyModal('bevel');
+            return;
+        }
         if (key === 'g') { e.preventDefault(); groupSelected(); return; }
-        if (key === '1') { e.preventDefault(); setView('back'); return; }
-        if (key === '3') { e.preventDefault(); setView('left'); return; }
-        if (key === '7') { e.preventDefault(); setView('bottom'); return; }
     }
 
     if (!e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -2461,14 +2774,10 @@ function onKeyDown(e) {
         if (key === 'q') handleRulerButton();
         if (key === 't') handleDropButton();
         if (key === 'h') hideSelected();
-        if (key === '0' || key === '.') frameSelected();
+        if (key === '.') frameSelected();
         if (e.key === 'Home') { e.preventDefault(); frameAll(); }
-        if (key === '5') toggleCamera(); 
         if (key === 'u') ungroupSelected(); 
         if (key === 'w') toggleSpace();
-        if (key === '1') setView('front');
-        if (key === '3') setView('right');
-        if (key === '7') setView('top');
     }
     
     if(e.shiftKey && key === 'd') { e.preventDefault(); cloneSelected(); }
@@ -2530,7 +2839,13 @@ function animate() {
         orbit.update(); 
     }
     
-    selectionHelpers.forEach(h => h.helper.update()); 
+    selectionHelpers.forEach(h => {
+        h.helper.update();
+        if (h.edgeOverlay && h.obj) {
+            h.obj.updateMatrixWorld(true);
+            h.obj.matrixWorld.decompose(h.edgeOverlay.position, h.edgeOverlay.quaternion, h.edgeOverlay.scale);
+        }
+    }); 
     
     renderer.clear();
     renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);

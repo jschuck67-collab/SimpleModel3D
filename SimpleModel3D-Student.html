@@ -86,8 +86,11 @@ button:hover { background: #666; }
 .inline-row select { flex: 1; margin-bottom: 0; }
 
 .btn-bool { background: #444; border-left: 2px solid #e67e22; }
-.btn-cutter { background: #444; border-left: 2px solid #ff4757; }
-.btn-cutter.active { background: #c0392b !important; border-color: #ff4757 !important; color: white; }
+.btn-bool-union:hover { background: #27ae60 !important; border-color: #2ecc71 !important; color: white; }
+.btn-bool-sub:hover { background: #c0392b !important; border-color: #ff4757 !important; color: white; }
+.btn-bool-inter:hover { background: #8e44ad !important; border-color: #a55eea !important; color: white; }
+.btn-cutter { background: #444; border-left: 2px solid #ff9f1a; }
+.btn-cutter.active { background: #d35400 !important; border-color: #ff9f1a !important; color: white; }
 .btn-keymap { border-left: 2px solid #f39c12; }
 .btn-keymap.active { background: #d35400 !important; border-color: #e67e22 !important; color: white; }
 .btn-snap { border-left: 2px solid #9b59b6; }
@@ -290,6 +293,90 @@ input[type="color"].disabled { opacity: 0.3; pointer-events: none; }
     cursor: pointer;
 }
 
+/* EDIT MODE TOP HUD BAR & LIVE DRAG READOUT BADGE */
+#edit-mode-bar {
+    position: absolute;
+    top: 44px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    z-index: 105;
+    pointer-events: auto;
+    user-select: none;
+}
+
+.mode-pill-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(38, 38, 38, 0.92);
+    border: 1px solid #555;
+    border-radius: 999px;
+    padding: 3px 6px;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.45);
+}
+
+.mode-pill-group.hidden {
+    display: none !important;
+}
+
+.mode-pill-btn {
+    width: auto;
+    margin: 0;
+    padding: 4px 10px;
+    font-size: 0.72rem;
+    font-weight: bold;
+    border-radius: 999px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: #ccc;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.mode-pill-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.mode-pill-btn.active {
+    background: #e67e22;
+    border-color: #f39c12;
+    color: #fff;
+}
+
+#mode-btn-object.active {
+    background: #4a90e2;
+    border-color: #357abd;
+    color: #fff;
+}
+
+.mode-sep {
+    color: #666;
+    font-size: 0.75rem;
+    padding: 0 2px;
+}
+
+#edit-drag-badge {
+    position: absolute;
+    display: none;
+    background: rgba(230, 126, 34, 0.95);
+    color: #fff;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    font-family: monospace;
+    border: 1px solid #fff;
+    pointer-events: none;
+    z-index: 250;
+    white-space: nowrap;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+}
+
 </style>
 </head>
 <body>
@@ -375,20 +462,25 @@ input[type="color"].disabled { opacity: 0.3; pointer-events: none; }
                 <div class="accordion-content">
                     <div class="status-msg" id="status-text">Select objects...</div>
                     <div class="grid-2" style="margin-bottom: 5px;">
-                        <button id="cutter-toggle" class="btn-cutter btn-small" onclick="toggleCutterMode()" title="Ghost red preview for hole cutters">👻 Hole Cutter</button>
-                        <button class="btn-small" onclick="swapBooleanOrder()" title="Swap which selected object is Base vs Cutter">⇄ Swap Order</button>
+                        <button id="cutter-toggle" class="btn-cutter btn-small" onclick="toggleCutterMode()" title="Toggle see-through X-Ray mode on active object">◪ X-Ray</button>
+                        <button class="btn-small" onclick="swapBooleanOrder()" title="Swap which selected object is Solid Base vs X-Ray Tool">⇄ Swap Order</button>
                     </div>
-                    <div class="grid-3">
-                        <button class="btn-bool btn-small" onclick="performBoolean('union')">Union</button>
-                        <button class="btn-bool btn-small" onclick="performBoolean('subtract')">Sub</button>
-                        <button class="btn-bool btn-small" onclick="performBoolean('intersect')">Inter</button>
+                    <div class="grid-3" style="margin-bottom: 6px;">
+                        <button class="btn-bool btn-bool-union btn-small" onclick="performBoolean('union')" onmouseenter="setBooleanHoverOp('union')" onmouseleave="setBooleanHoverOp(null)" title="Combine Base and Tool objects into one solid">Union</button>
+                        <button class="btn-bool btn-bool-sub btn-small" onclick="performBoolean('subtract')" onmouseenter="setBooleanHoverOp('subtract')" onmouseleave="setBooleanHoverOp(null)" title="Cut Tool object(s) out of the solid Cyan Base object">Sub</button>
+                        <button class="btn-bool btn-bool-inter btn-small" onclick="performBoolean('intersect')" onmouseenter="setBooleanHoverOp('intersect')" onmouseleave="setBooleanHoverOp(null)" title="Keep only the overlapping volume shared by Base and Tool">Inter</button>
+                    </div>
+                    <div class="check-row" style="margin-bottom: 4px;" onclick="document.getElementById('bool-keep-tool').click(); event.stopPropagation();" title="Keep the Tool object(s) in the scene after the Boolean (great for interlocking parts)">
+                        <input type="checkbox" id="bool-keep-tool" onclick="event.stopPropagation();">
+                        <span>Keep Tool Object</span>
                     </div>
                 </div>
 
                 <h4 class="accordion-header" onclick="this.classList.toggle('collapsed-parent'); this.nextElementSibling.classList.toggle('collapsed');"><span>Deform & Modify</span> <span class="chevron">▼</span></h4>
                 <div class="accordion-content">
+                    <button id="btn-edit-mode-left" class="btn-small" style="background:#e67e22; margin-bottom: 6px;" onclick="toggleEditMode()" title="Direct Vertex / Edge / Face Edit Mode (Tab)">✏️ Direct Edit Mode (Tab)</button>
                     <div class="grid-2" style="margin-bottom: 5px;">
-                        <button id="tool-extrude" class="btn-small" style="background:#8e44ad;" onclick="openModifyModal('extrude')" title="Extrude or Inset a Face (E)">Extrude / Inset (E)</button>
+                        <button id="tool-extrude" class="btn-small" style="background:#8e44ad;" onclick="openModifyModal('extrude')" title="Modal Extrude or Inset a Face">Modal Extrude</button>
                         <button class="btn-small" style="background:#8e44ad;" onclick="openModifyModal('bevel')" title="Round Fillet or 45° Chamfer Edges (Ctrl+B)">Bevel / Chamfer</button>
                     </div>
                     <div class="grid-2" style="margin-bottom: 5px;">
@@ -485,10 +577,11 @@ input[type="color"].disabled { opacity: 0.3; pointer-events: none; }
                     </div>
                     <div class="grid-2">
                         <button id="theme-toggle" onclick="toggleTheme()" class="btn-small">Theme: DARK</button>
-                        <button onclick="toggleCamera()" title="Toggle Camera (5)">Persp / Ortho</button>
+                        <button onclick="toggleCamera()" class="btn-small" title="Toggle Camera (5)">Persp / Ortho</button>
                     </div>
+                    <button id="light-mode-toggle" class="btn-small active" onclick="toggleLightingMode()" title="Switch between 360° CAD World Light (all sides lit) and Directional Sun Light">Lighting: CAD World</button>
                     <div class="input-group">
-                        <div class="label-row" style="margin-top:5px;">LIGHT INTENSITY (<span id="light-val">100</span>%)</div>
+                        <div class="label-row" style="margin-top:5px;">WORLD LIGHT (<span id="light-val">100</span>%)</div>
                         <input type="range" id="light-intensity" min="0" max="2" step="0.1" value="1" oninput="updateLighting(this.value)">
                     </div>
                     <div class="inline-row">
@@ -620,6 +713,21 @@ input[type="color"].disabled { opacity: 0.3; pointer-events: none; }
     </div>
 
     <div id="ruler-label"></div>
+    <div id="edit-drag-badge"></div>
+
+    <!-- TOP-CENTER BLENDER / CAD EDIT MODE HUD BAR -->
+    <div id="edit-mode-bar" onpointerdown="event.stopPropagation()">
+        <div id="edit-subtools" class="mode-pill-group hidden">
+            <button id="actmode-move" class="mode-pill-btn active" onclick="switchEditActionMode('move')" title="Pull / Move selected Vertex, Edge, or Face in any direction">↔ Pull / Move</button>
+            <button id="actmode-extrude" class="mode-pill-btn" onclick="switchEditActionMode('extrude')" title="Extrude New Segment when dragging Gizmo on a Face (E)">⏫ Extrude (E)</button>
+            <button id="actmode-inset" class="mode-pill-btn" onclick="switchEditActionMode('inset')" title="Inset Face inward when dragging Gizmo (I)">▣ Inset (I)</button>
+            <button id="actmode-bevel" class="mode-pill-btn" onclick="switchEditActionMode('bevel')" title="Bevel / Chamfer selected Edge when dragging Gizmo (B)">◩ Bevel (B)</button>
+            <span class="mode-sep">|</span>
+            <button id="submode-vertex" class="mode-pill-btn" onclick="switchEditSubMode('vertex')" title="Select Corner Vertices (1)">• Vertex (1)</button>
+            <button id="submode-edge" class="mode-pill-btn" onclick="switchEditSubMode('edge')" title="Select Feature Edges (2)">╱ Edge (2)</button>
+            <button id="submode-face" class="mode-pill-btn active" onclick="switchEditSubMode('face')" title="Select Polygon Faces (3)">▢ Face (3)</button>
+        </div>
+    </div>
 
     <div id="dim-x" class="dim-label"></div>
     <div id="dim-y" class="dim-label"></div>
@@ -643,10 +751,12 @@ input[type="color"].disabled { opacity: 0.3; pointer-events: none; }
                     <tr><td>Right-Click</td><td>Object / Scene Context Menu</td></tr>
                     <tr><td>Alt + Left Drag</td><td>Orbit (Trackpad / 3-Btn Emulation)</td></tr>
                     <tr><td>Left-Click + Drag</td><td>Box / Marquee Selection (+Shift Add)</td></tr>
+                    <tr><td>Tab</td><td>Toggle Object Mode / Edit Mode</td></tr>
+                    <tr><td>1 / 2 / 3 (in Edit Mode)</td><td>Select Vertex / Edge / Face</td></tr>
+                    <tr><td>E / I (in Edit Mode)</td><td>Extrude Drag / Inset Drag on Face</td></tr>
                     <tr><td>M (or G in Blender)</td><td>Move / Grab Tool</td></tr>
                     <tr><td>R</td><td>Rotate Tool</td></tr>
                     <tr><td>S</td><td>Scale Tool</td></tr>
-                    <tr><td>E</td><td>Face Extrude / Inset Tool</td></tr>
                     <tr><td>Ctrl + B</td><td>Edge Bevel / 45° Chamfer Tool</td></tr>
                     <tr><td>Ctrl + A</td><td>Apply Transform Menu (Loc / Rot / Scale)</td></tr>
                     <tr><td>Alt + G / R / S</td><td>Reset Position / Rotation / Scale</td></tr>
@@ -1060,6 +1170,147 @@ function getLocalSize(obj) {
     return size;
 }
 
+/**
+ * Eliminates CSG T-junctions by splitting any triangle edge (u -> v) that has another
+ * mesh vertex lying strictly on its interior segment. Ensures adjacent faces after
+ * Boolean operations share all boundary vertices so pulling/extruding faces never leaves pinned mid-edge vertices.
+ */
+function resolveTJunctions(geometry, mesh = null) {
+    if (!geometry || !geometry.attributes.position) return geometry;
+    geometry.clearGroups();
+    if (geometry.index) {
+        geometry = geometry.toNonIndexed();
+        geometry.clearGroups();
+    }
+    const pos = geometry.attributes.position;
+    const numVerts = pos.count;
+    const numTris = Math.floor(numVerts / 3);
+    if (numTris === 0) return geometry;
+
+    const quant = 1000;
+    const uniquePts = [];
+    const keyToPt = new Map();
+    const getCanonicalPt = (x, y, z) => {
+        const k = `${Math.round(x * quant)},${Math.round(y * quant)},${Math.round(z * quant)}`;
+        let pt = keyToPt.get(k);
+        if (!pt) {
+            pt = new THREE.Vector3(x, y, z);
+            keyToPt.set(k, pt);
+            uniquePts.push(pt);
+        }
+        return pt;
+    };
+
+    const tris = [];
+    const hasGroups = mesh && Array.isArray(mesh.userData?.triGroupIds) && mesh.userData.triGroupIds.length === numTris;
+    for (let t = 0; t < numTris; t++) {
+        const i0 = t * 3, i1 = t * 3 + 1, i2 = t * 3 + 2;
+        const a = getCanonicalPt(pos.getX(i0), pos.getY(i0), pos.getZ(i0));
+        const b = getCanonicalPt(pos.getX(i1), pos.getY(i1), pos.getZ(i1));
+        const c = getCanonicalPt(pos.getX(i2), pos.getY(i2), pos.getZ(i2));
+        if (a === b || b === c || c === a) continue;
+        tris.push({
+            a, b, c,
+            group: hasGroups ? mesh.userData.triGroupIds[t] : -1
+        });
+    }
+
+    const finalTris = [];
+    const ab = new THREE.Vector3();
+    const ap = new THREE.Vector3();
+    const proj = new THREE.Vector3();
+    const distTolSq = 1e-4; // 0.01mm perpendicular tolerance
+    const endTol = 1e-3;    // 0.001mm endpoint margin
+
+    const findSplitPointOnEdge = (u, v) => {
+        ab.subVectors(v, u);
+        const lenSq = ab.lengthSq();
+        if (lenSq < 1e-5) return null;
+        const len = Math.sqrt(lenSq);
+        const sMargin = Math.min(0.05, endTol / len);
+
+        const minX = Math.min(u.x, v.x) - endTol, maxX = Math.max(u.x, v.x) + endTol;
+        const minY = Math.min(u.y, v.y) - endTol, maxY = Math.max(u.y, v.y) + endTol;
+        const minZ = Math.min(u.z, v.z) - endTol, maxZ = Math.max(u.z, v.z) + endTol;
+
+        let bestPt = null;
+        let bestMidDist = Infinity;
+
+        for (let i = 0; i < uniquePts.length; i++) {
+            const p = uniquePts[i];
+            if (p === u || p === v) continue;
+            if (p.x < minX || p.x > maxX || p.y < minY || p.y > maxY || p.z < minZ || p.z > maxZ) continue;
+            ap.subVectors(p, u);
+            const s = ap.dot(ab) / lenSq;
+            if (s <= sMargin || s >= 1 - sMargin) continue;
+            proj.copy(u).addScaledVector(ab, s);
+            if (proj.distanceToSquared(p) <= distTolSq) {
+                const midDist = Math.abs(s - 0.5);
+                if (midDist < bestMidDist) {
+                    bestMidDist = midDist;
+                    bestPt = p;
+                }
+            }
+        }
+        return bestPt;
+    };
+
+    let splitCount = 0;
+    const maxSplits = 2000;
+    while (tris.length > 0) {
+        const tri = tris.pop();
+        if (splitCount >= maxSplits) {
+            finalTris.push(tri);
+            continue;
+        }
+        const { a, b, c, group } = tri;
+        const pAB = findSplitPointOnEdge(a, b);
+        if (pAB) {
+            splitCount++;
+            tris.push({ a, b: pAB, c, group }, { a: pAB, b, c, group });
+            continue;
+        }
+        const pBC = findSplitPointOnEdge(b, c);
+        if (pBC) {
+            splitCount++;
+            tris.push({ a, b, c: pBC, group }, { a, b: pBC, c, group });
+            continue;
+        }
+        const pCA = findSplitPointOnEdge(c, a);
+        if (pCA) {
+            splitCount++;
+            tris.push({ a, b, c: pCA, group }, { a: pCA, b, c, group });
+            continue;
+        }
+        finalTris.push(tri);
+    }
+
+    if (splitCount === 0) return geometry;
+
+    const newPositions = new Float32Array(finalTris.length * 9);
+    const newGroups = hasGroups ? new Array(finalTris.length) : null;
+    for (let i = 0; i < finalTris.length; i++) {
+        const t = finalTris[i];
+        const base = i * 9;
+        newPositions[base]     = t.a.x; newPositions[base + 1] = t.a.y; newPositions[base + 2] = t.a.z;
+        newPositions[base + 3] = t.b.x; newPositions[base + 4] = t.b.y; newPositions[base + 5] = t.b.z;
+        newPositions[base + 6] = t.c.x; newPositions[base + 7] = t.c.y; newPositions[base + 8] = t.c.z;
+        if (hasGroups) newGroups[i] = t.group;
+    }
+
+    geometry.clearGroups();
+    geometry.setAttribute('position', new THREE.BufferAttribute(newPositions, 3));
+    geometry.deleteAttribute('normal');
+    geometry.deleteAttribute('uv');
+    geometry.computeVertexNormals();
+    geometry.computeBoundingBox();
+    geometry.computeBoundingSphere();
+    if (hasGroups && mesh) {
+        mesh.userData.triGroupIds = newGroups;
+    }
+    return geometry;
+}
+
 // === js/state.js ===
 function saveAutosave(objects, projectName) {
     if (objects.length > 0) {
@@ -1090,12 +1341,58 @@ function closeTubeModal() {
     document.getElementById('tube-modal').classList.add('hidden');
 }
 function updateLighting(val, scene) {
-    const intensity = parseFloat(val);
-    document.getElementById('light-val').innerText = Math.round(intensity * 100);
+    const intensity = val !== undefined && val !== null
+        ? parseFloat(val)
+        : (scene.userData.lightIntensity !== undefined ? scene.userData.lightIntensity : 1.0);
+    scene.userData.lightIntensity = intensity;
+
+    const labelEl = document.getElementById('light-val');
+    if (labelEl) labelEl.innerText = Math.round(intensity * 100);
+
+    const mode = scene.userData.lightingMode || 'world';
     const ambient = scene.getObjectByName('AmbientLight');
+    const hemi = scene.getObjectByName('WorldHemiLight');
+    const fillGroup = scene.getObjectByName('WorldFillGroup');
     const sun = scene.getObjectByName('SunLight');
-    if(ambient) ambient.intensity = 0.6 * intensity;
-    if(sun) sun.intensity = 1.0 * intensity;
+
+    if (mode === 'world') {
+        if (ambient) ambient.intensity = 0.45 * intensity;
+        if (hemi) hemi.intensity = 0.55 * intensity;
+        if (fillGroup) {
+            fillGroup.visible = true;
+            if (fillGroup.children[0]) fillGroup.children[0].intensity = 0.65 * intensity;
+            if (fillGroup.children[1]) fillGroup.children[1].intensity = 0.50 * intensity;
+            if (fillGroup.children[2]) fillGroup.children[2].intensity = 0.35 * intensity;
+        }
+        if (sun) sun.intensity = 0;
+    } else {
+        if (ambient) ambient.intensity = 0.55 * intensity;
+        if (hemi) hemi.intensity = 0;
+        if (fillGroup) fillGroup.visible = false;
+        if (sun) sun.intensity = 1.15 * intensity;
+    }
+
+    if ('environmentIntensity' in scene) {
+        scene.environmentIntensity = intensity;
+    }
+}
+function toggleLightingMode(scene) {
+    const current = scene.userData.lightingMode || 'world';
+    const next = current === 'world' ? 'sun' : 'world';
+    scene.userData.lightingMode = next;
+    updateLighting(scene.userData.lightIntensity, scene);
+
+    const btn = document.getElementById('light-mode-toggle');
+    if (btn) {
+        btn.innerText = next === 'world' ? 'Lighting: CAD World' : 'Lighting: Sun Shadow';
+        btn.classList.toggle('active', next === 'world');
+    }
+    const statusEl = document.getElementById('status-text');
+    if (statusEl) {
+        statusEl.innerText = next === 'world'
+            ? '360° CAD World Lighting enabled (all sides lit)'
+            : 'Directional Sun Lighting enabled';
+    }
 }
 
 // === js/scene.js ===
@@ -1175,13 +1472,42 @@ function initScene() {
     scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
     document.body.appendChild(renderer.domElement);
     
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.45);
     ambientLight.name = 'AmbientLight';
     scene.add(ambientLight);
-    const sun = new THREE.DirectionalLight(0xffffff, 1);
+
+    // Z-up Hemisphere light for natural top-to-bottom world gradient
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xb0b8c5, 0.55);
+    hemiLight.position.set(0, 0, 1);
+    hemiLight.name = 'WorldHemiLight';
+    scene.add(hemiLight);
+
+    // 360-degree CAD World Fill Lights (distinct brightness on all 6 axes so no face is ever in dark shadow)
+    const worldFillGroup = new THREE.Group();
+    worldFillGroup.name = 'WorldFillGroup';
+
+    const fill1 = new THREE.DirectionalLight(0xffffff, 0.65);
+    fill1.position.set(-50, -120, 140);
+    worldFillGroup.add(fill1);
+
+    const fill2 = new THREE.DirectionalLight(0xffffff, 0.50);
+    fill2.position.set(130, 90, -70);
+    worldFillGroup.add(fill2);
+
+    const fill3 = new THREE.DirectionalLight(0xffffff, 0.35);
+    fill3.position.set(-120, 100, 50);
+    worldFillGroup.add(fill3);
+
+    scene.add(worldFillGroup);
+
+    // Single Directional Sun (used when toggled to Sun Shadow mode)
+    const sun = new THREE.DirectionalLight(0xffffff, 0);
     sun.position.set(100, -100, 200);
     sun.name = 'SunLight';
     scene.add(sun);
+
+    scene.userData.lightingMode = 'world'; // 'world' (360° CAD World) | 'sun' (Directional Sun)
+    scene.userData.lightIntensity = 1.0;
 
     const grid = new THREE.GridHelper(256, 256, 0x444444, 0x383838);
     grid.rotation.x = Math.PI / 2;
@@ -1211,6 +1537,7 @@ function initScene() {
 
     const orbit = new OrbitControls(camera, renderer.domElement);
     orbit.enableDamping = false;
+    orbit.zoomSpeed = 1.6;
     // Blender Viewport Navigation: Middle Mouse = Rotate (Shift+MMB = Pan, Scroll = Zoom), Right Click = Context Menu
     orbit.mouseButtons = {
         LEFT: null,
@@ -1389,10 +1716,14 @@ function loadTextGeometry(userText, fontName, fontStyle, size, depth, onSuccess,
 // === js/booleanOps.js ===
 const csgEvaluator = new Evaluator();
 csgEvaluator.attributes = ['position', 'normal'];
+csgEvaluator.useGroups = false;
 
 function createPreparedBrush(mesh) {
     mesh.updateMatrixWorld(true);
     let geo = mesh.geometry.clone();
+    if (!geo.index) {
+        geo = mergeVertices(geo);
+    }
     if (!geo.attributes.normal) {
         geo.computeVertexNormals();
     }
@@ -1425,12 +1756,24 @@ function createPreparedBrush(mesh) {
     brush.updateMatrixWorld();
     return brush;
 }
-function executeBoolean(meshA, meshB, op, isWireframe) {
-    const brushA = createPreparedBrush(meshA);
-    const brushB = createPreparedBrush(meshB);
-    
-    const res = csgEvaluator.evaluate(brushA, brushB, op === 'subtract' ? SUBTRACTION : op === 'union' ? ADDITION : INTERSECTION);
-    
+function executeBoolean(meshA, meshBOrList, op, isWireframe) {
+    const toolList = Array.isArray(meshBOrList) ? meshBOrList : [meshBOrList];
+    const opConst = op === 'subtract' ? SUBTRACTION : op === 'union' ? ADDITION : INTERSECTION;
+
+    let currentBrush = createPreparedBrush(meshA);
+    for (const toolMesh of toolList) {
+        if (!toolMesh || !toolMesh.isMesh) continue;
+        const brushB = createPreparedBrush(toolMesh);
+        const nextBrush = csgEvaluator.evaluate(currentBrush, brushB, opConst);
+        currentBrush.geometry.dispose();
+        brushB.geometry.dispose();
+        currentBrush = nextBrush;
+    }
+
+    const res = currentBrush;
+    res.geometry.clearGroups();
+    res.geometry.computeVertexNormals();
+
     // Center the resulting geometry so its pivot is at its bounding box center
     res.geometry.computeBoundingBox();
     const center = new THREE.Vector3();
@@ -1462,11 +1805,10 @@ function executeBoolean(meshA, meshB, op, isWireframe) {
     mesh.userData.trueColor = trueColor;
     mesh.userData.opacity = opacity;
     mesh.userData.materialType = matType;
+    mesh.userData.triGroupIds = null; // Fresh topology for Direct Edit Mode (Tab)
     mesh.position.copy(center);
     mesh.name = op.charAt(0).toUpperCase() + op.slice(1) + " Result";
-    
-    brushA.geometry.dispose();
-    brushB.geometry.dispose();
+
     return mesh;
 }
 
@@ -1986,7 +2328,7 @@ function applyEdgeBevel(mesh, bevelWidth = 1.5, style = 'fillet', shapeMode = 'b
         // Box / Rectangular Prism at exact physical W, D, H dimensions
         newGeo = new RoundedBoxGeometry(w, d, h, segs, actualBevel);
         if (segs === 1) {
-            newGeo = newGeo.toNonIndexed();
+            if (newGeo.index) newGeo = newGeo.toNonIndexed();
             newGeo.computeVertexNormals();
         }
     }
@@ -1997,6 +2339,1301 @@ function applyEdgeBevel(mesh, bevelWidth = 1.5, style = 'fillet', shapeMode = 'b
     mesh.geometry = newGeo;
     mesh.scale.set(1, 1, 1);
     mesh.updateMatrixWorld(true);
+}
+
+// === js/editMode.js ===
+/**
+ * CAD-Clean Edit Mode Engine (Bridging CAD Direct Modeling & Blender Edit Mode)
+ * - Groups coplanar triangles (respecting Inset/Extrude face group IDs) into clean Logical Faces
+ * - Extracts sharp Feature Edges & Inset Subdivision Edges (hiding internal triangle diagonals)
+ * - Extracts true Corner Vertices
+ * - Supports live 3D Gizmo Pull/Move in any direction, Rotate, Scale, Extrude (E), and Inset (I)
+ */
+
+let activeEditMesh = null;
+let topology = null;
+let subMode = 'face';      // 'vertex' | 'edge' | 'face'
+let actionMode = 'move';   // 'move' | 'extrude' | 'inset'
+let selectedFeature = null; // { type: 'face'|'edge'|'vertex', id: number }
+let hoveredFeature = null;
+
+// Visual overlay helpers inside scene
+let overlayGroup = null;
+let featureEdgeLines = null;
+let cornerPointsMesh = null;
+let selectionHighlightMesh = null;
+let hoverHighlightMesh = null;
+
+// Gizmo proxy object
+let editProxy = null;
+let dragState = null;
+function initEditMode(scene) {
+    overlayGroup = new THREE.Group();
+    overlayGroup.name = 'EditModeOverlay';
+    overlayGroup.renderOrder = 900;
+    scene.add(overlayGroup);
+
+    editProxy = new THREE.Object3D();
+    editProxy.name = 'EditModeGizmoProxy';
+    scene.add(editProxy);
+}
+function isEditModeActive() {
+    return activeEditMesh !== null;
+}
+function getEditMesh() {
+    return activeEditMesh;
+}
+function getEditProxy() {
+    return editProxy;
+}
+function getEditSubMode() {
+    return subMode;
+}
+function getEditActionMode() {
+    return actionMode;
+}
+function enterEditMode(mesh, transform, scene) {
+    if (!mesh || !mesh.isMesh || !mesh.geometry) return false;
+    activeEditMesh = mesh;
+
+    // Bake scale into geometry so local edits match 1:1 physical units
+    if (Math.abs(mesh.scale.x - 1) > 1e-4 || Math.abs(mesh.scale.y - 1) > 1e-4 || Math.abs(mesh.scale.z - 1) > 1e-4) {
+        const wasNeg = (mesh.scale.x * mesh.scale.y * mesh.scale.z) < 0;
+        mesh.geometry = mesh.geometry.clone();
+        mesh.geometry.scale(mesh.scale.x, mesh.scale.y, mesh.scale.z);
+        if (wasNeg && mesh.geometry.index) {
+            const idx = mesh.geometry.index;
+            for (let i = 0; i < idx.count; i += 3) {
+                const tmp = idx.getX(i + 1);
+                idx.setX(i + 1, idx.getX(i + 2));
+                idx.setX(i + 2, tmp);
+            }
+            idx.needsUpdate = true;
+        }
+        mesh.scale.set(1, 1, 1);
+        mesh.updateMatrixWorld(true);
+    }
+
+    // Ensure non-indexed geometry for crisp flat-shaded CAD face normals
+    mesh.geometry.clearGroups();
+    if (mesh.geometry.index) {
+        mesh.geometry = mesh.geometry.toNonIndexed();
+    } else {
+        mesh.geometry = mesh.geometry.clone();
+    }
+    mesh.geometry.clearGroups();
+    mesh.geometry.computeVertexNormals();
+    mesh.geometry.computeBoundingBox();
+    mesh.geometry.computeBoundingSphere();
+
+    rebuildEditTopology();
+    selectedFeature = null;
+    hoveredFeature = null;
+    transform.detach();
+    return true;
+}
+function exitEditMode(transform) {
+    activeEditMesh = null;
+    topology = null;
+    selectedFeature = null;
+    hoveredFeature = null;
+    dragState = null;
+    clearOverlays();
+    if (transform) transform.detach();
+    hideDragBadge();
+}
+function setEditSubMode(mode, transform) {
+    subMode = mode; // 'vertex' | 'edge' | 'face'
+    selectedFeature = null;
+    hoveredFeature = null;
+    if (transform) transform.detach();
+    if (activeEditMesh) {
+        rebuildBaseOverlays();
+        updateSelectionHighlight();
+    }
+}
+function setEditActionMode(mode) {
+    actionMode = mode; // 'move' | 'extrude' | 'inset'
+}
+function rebuildEditTopology() {
+    if (!activeEditMesh) return;
+    topology = buildTopology(activeEditMesh.geometry, activeEditMesh);
+    rebuildBaseOverlays();
+    updateSelectionHighlight();
+}
+
+/**
+ * Builds welded CAD topology (Logical Faces, Feature Edges, Corner Vertices) from non-indexed triangles.
+ * Preserves per-triangle face group IDs (mesh.userData.triGroupIds) so coplanar Inset subdivisions remain distinct!
+ */
+function buildTopology(geometry, mesh) {
+    const pos = geometry.attributes.position;
+    const numVerts = pos.count;
+    const numTris = Math.floor(numVerts / 3);
+
+    // Check if valid per-triangle face group IDs already exist on this mesh
+    let existingGroups = (mesh && Array.isArray(mesh.userData.triGroupIds) && mesh.userData.triGroupIds.length === numTris)
+        ? mesh.userData.triGroupIds
+        : null;
+
+    // 1. Cluster coincident 3D vertices into Topological Vertices
+    const topoVerts = [];
+    const vertKeyMap = new Map();
+    const attrToTopo = new Int32Array(numVerts);
+
+    const quant = 1000; // 0.001mm welding tolerance
+    for (let i = 0; i < numVerts; i++) {
+        const x = pos.getX(i);
+        const y = pos.getY(i);
+        const z = pos.getZ(i);
+        const key = `${Math.round(x * quant)},${Math.round(y * quant)},${Math.round(z * quant)}`;
+        let tvId = vertKeyMap.get(key);
+        if (tvId === undefined) {
+            tvId = topoVerts.length;
+            vertKeyMap.set(key, tvId);
+            topoVerts.push({
+                id: tvId,
+                position: new THREE.Vector3(x, y, z),
+                attrIndices: [i]
+            });
+        } else {
+            topoVerts[tvId].attrIndices.push(i);
+        }
+        attrToTopo[i] = tvId;
+    }
+
+    // 2. Build triangle list & normals
+    const triVerts = new Array(numTris);
+    const triNormals = new Array(numTris);
+    const triAreas = new Float32Array(numTris);
+    const edgeToTris = new Map();
+
+    const edgeKey = (a, b) => (a < b ? `${a}_${b}` : `${b}_${a}`);
+
+    const vA = new THREE.Vector3();
+    const vB = new THREE.Vector3();
+    const vC = new THREE.Vector3();
+    const e1 = new THREE.Vector3();
+    const e2 = new THREE.Vector3();
+
+    for (let t = 0; t < numTris; t++) {
+        const i0 = t * 3, i1 = t * 3 + 1, i2 = t * 3 + 2;
+        const tv0 = attrToTopo[i0];
+        const tv1 = attrToTopo[i1];
+        const tv2 = attrToTopo[i2];
+        triVerts[t] = [tv0, tv1, tv2];
+
+        vA.copy(topoVerts[tv0].position);
+        vB.copy(topoVerts[tv1].position);
+        vC.copy(topoVerts[tv2].position);
+        e1.subVectors(vB, vA);
+        e2.subVectors(vC, vA);
+        const cross = new THREE.Vector3().crossVectors(e1, e2);
+        triAreas[t] = cross.length() * 0.5;
+        triNormals[t] = cross.normalize();
+
+        const pairs = [[tv0, tv1], [tv1, tv2], [tv2, tv0]];
+        for (const [u, v] of pairs) {
+            if (u === v) continue;
+            const k = edgeKey(u, v);
+            let list = edgeToTris.get(k);
+            if (!list) {
+                list = [];
+                edgeToTris.set(k, list);
+            }
+            list.push(t);
+        }
+    }
+
+    // 3. Flood-fill coplanar adjacent triangles into Logical Faces
+    // If existingGroups is present, only merge triangles that also share the same group ID!
+    const triToFace = new Int32Array(numTris).fill(-1);
+    const logicalFaces = [];
+    const COPLANAR_DOT = 0.992; // ~7 degrees tolerance for flat faces
+
+    for (let t = 0; t < numTris; t++) {
+        if (triToFace[t] !== -1) continue;
+        const faceId = logicalFaces.length;
+        const seedNormal = triNormals[t];
+        const seedGroup = existingGroups ? existingGroups[t] : -1;
+        const tris = [t];
+        triToFace[t] = faceId;
+
+        const queue = [t];
+        while (queue.length > 0) {
+            const curr = queue.pop();
+            const [a, b, c] = triVerts[curr];
+            const edges = [edgeKey(a, b), edgeKey(b, c), edgeKey(c, a)];
+            for (const ek of edges) {
+                const neighbors = edgeToTris.get(ek) || [];
+                for (const nb of neighbors) {
+                    if (triToFace[nb] !== -1) continue;
+                    if (existingGroups && existingGroups[nb] !== seedGroup) continue;
+                    if (triNormals[nb].dot(seedNormal) >= COPLANAR_DOT && triNormals[nb].dot(triNormals[curr]) >= COPLANAR_DOT) {
+                        triToFace[nb] = faceId;
+                        tris.push(nb);
+                        queue.push(nb);
+                    }
+                }
+            }
+        }
+
+        // Collect unique topological vertices & directed boundary edges for this logical face
+        const vertSet = new Set();
+        const directedEdgeCount = new Map();
+        const avgNormal = new THREE.Vector3();
+
+        for (const ti of tris) {
+            const [v0, v1, v2] = triVerts[ti];
+            vertSet.add(v0); vertSet.add(v1); vertSet.add(v2);
+            avgNormal.addScaledVector(triNormals[ti], Math.max(1e-5, triAreas[ti]));
+
+            const dirEdges = [[v0, v1], [v1, v2], [v2, v0]];
+            for (const [u, v] of dirEdges) {
+                if (u === v) continue;
+                const revKey = `${v}->${u}`;
+                if (directedEdgeCount.has(revKey)) {
+                    // Internal shared edge within the same logical face cancels out!
+                    directedEdgeCount.delete(revKey);
+                } else {
+                    directedEdgeCount.set(`${u}->${v}`, [u, v]);
+                }
+            }
+        }
+
+        avgNormal.normalize();
+        const boundaryEdges = Array.from(directedEdgeCount.values());
+        const topoVertIds = Array.from(vertSet);
+
+        // Include any collinear T-junction topological vertex sitting along any boundary edge of this face when Pulling/Moving
+        const moveVertSet = new Set(vertSet);
+        const segVec = new THREE.Vector3();
+        const ptVec = new THREE.Vector3();
+        for (const [u, v] of boundaryEdges) {
+            const pU = topoVerts[u].position;
+            const pV = topoVerts[v].position;
+            segVec.subVectors(pV, pU);
+            const lenSq = segVec.lengthSq();
+            if (lenSq < 1e-6) continue;
+            for (let tvId = 0; tvId < topoVerts.length; tvId++) {
+                if (moveVertSet.has(tvId)) continue;
+                const pW = topoVerts[tvId].position;
+                ptVec.subVectors(pW, pU);
+                const s = ptVec.dot(segVec) / lenSq;
+                if (s > 0.001 && s < 0.999) {
+                    const distSq = pU.clone().addScaledVector(segVec, s).distanceToSquared(pW);
+                    if (distSq < 1e-4) moveVertSet.add(tvId);
+                }
+            }
+        }
+
+        const center = new THREE.Vector3();
+        topoVertIds.forEach(id => center.add(topoVerts[id].position));
+        if (topoVertIds.length > 0) center.divideScalar(topoVertIds.length);
+
+        logicalFaces.push({
+            id: faceId,
+            triangles: tris,
+            topoVertIds,
+            allMoveVertIds: Array.from(moveVertSet),
+            boundaryEdges,
+            normal: avgNormal,
+            center
+        });
+    }
+
+    // Save canonical triGroupIds on mesh.userData so future Inset/Extrude operations preserve face groups
+    if (mesh) {
+        mesh.userData.triGroupIds = Array.from(triToFace);
+    }
+
+    // 4. Extract Feature Edges (edges separating two different Logical Faces, including Inset rings!)
+    const rawFeatureSegments = [];
+    for (const [ek, tris] of edgeToTris.entries()) {
+        const [uStr, vStr] = ek.split('_');
+        const u = parseInt(uStr, 10), v = parseInt(vStr, 10);
+        if (tris.length === 1) {
+            const f0 = triToFace[tris[0]];
+            rawFeatureSegments.push({ u, v, faces: [f0, -1] });
+        } else if (tris.length >= 2) {
+            const f0 = triToFace[tris[0]];
+            const f1 = triToFace[tris[1]];
+            if (f0 !== f1) {
+                const pair = f0 < f1 ? [f0, f1] : [f1, f0];
+                rawFeatureSegments.push({ u, v, faces: pair });
+            }
+        }
+    }
+
+    // Group collinear connected feature segments separating the same two faces into Logical Feature Edges
+    const segUsed = new Uint8Array(rawFeatureSegments.length);
+    const featureEdges = [];
+
+    for (let i = 0; i < rawFeatureSegments.length; i++) {
+        if (segUsed[i]) continue;
+        segUsed[i] = 1;
+        const seed = rawFeatureSegments[i];
+        const segs = [[seed.u, seed.v]];
+        const vertSet = new Set([seed.u, seed.v]);
+        const seedDir = new THREE.Vector3().subVectors(topoVerts[seed.v].position, topoVerts[seed.u].position).normalize();
+
+        let grown = true;
+        while (grown) {
+            grown = false;
+            for (let j = 0; j < rawFeatureSegments.length; j++) {
+                if (segUsed[j]) continue;
+                const cand = rawFeatureSegments[j];
+                if (cand.faces[0] !== seed.faces[0] || cand.faces[1] !== seed.faces[1]) continue;
+                if (!vertSet.has(cand.u) && !vertSet.has(cand.v)) continue;
+                const candDir = new THREE.Vector3().subVectors(topoVerts[cand.v].position, topoVerts[cand.u].position).normalize();
+                if (Math.abs(candDir.dot(seedDir)) > 0.992) {
+                    segUsed[j] = 1;
+                    segs.push([cand.u, cand.v]);
+                    vertSet.add(cand.u);
+                    vertSet.add(cand.v);
+                    grown = true;
+                }
+            }
+        }
+
+        const topoVertIds = Array.from(vertSet);
+        const center = new THREE.Vector3();
+        topoVertIds.forEach(id => center.add(topoVerts[id].position));
+        center.divideScalar(topoVertIds.length);
+
+        const normal = new THREE.Vector3();
+        if (seed.faces[0] >= 0) normal.add(logicalFaces[seed.faces[0]].normal);
+        if (seed.faces[1] >= 0) normal.add(logicalFaces[seed.faces[1]].normal);
+        if (normal.lengthSq() < 1e-4) normal.set(0, 0, 1);
+        else normal.normalize();
+
+        featureEdges.push({
+            id: featureEdges.length,
+            segments: segs,
+            topoVertIds,
+            center,
+            direction: seedDir,
+            normal,
+            faces: seed.faces
+        });
+    }
+
+    // 5. Extract Corner Vertices (vertices where 2+ non-collinear feature edges meet)
+    const vertEdgeDirs = new Map();
+    const vertFaces = new Map();
+    for (const fe of featureEdges) {
+        for (const vid of fe.topoVertIds) {
+            if (!vertEdgeDirs.has(vid)) vertEdgeDirs.set(vid, []);
+            vertEdgeDirs.get(vid).push(fe.direction);
+            if (!vertFaces.has(vid)) vertFaces.set(vid, new Set());
+            if (fe.faces[0] >= 0) vertFaces.get(vid).add(fe.faces[0]);
+            if (fe.faces[1] >= 0) vertFaces.get(vid).add(fe.faces[1]);
+        }
+    }
+
+    const cornerVerts = [];
+    for (const [vid, dirs] of vertEdgeDirs.entries()) {
+        let isCorner = false;
+        for (let a = 0; a < dirs.length && !isCorner; a++) {
+            for (let b = a + 1; b < dirs.length; b++) {
+                if (Math.abs(dirs[a].dot(dirs[b])) < 0.98) {
+                    isCorner = true;
+                    break;
+                }
+            }
+        }
+        if (isCorner) {
+            const normal = new THREE.Vector3();
+            const fSet = vertFaces.get(vid) || new Set();
+            fSet.forEach(fid => normal.add(logicalFaces[fid].normal));
+            if (normal.lengthSq() < 1e-4) normal.set(0, 0, 1);
+            else normal.normalize();
+
+            cornerVerts.push({
+                id: cornerVerts.length,
+                topoVertId: vid,
+                position: topoVerts[vid].position.clone(),
+                normal
+            });
+        }
+    }
+
+    if (cornerVerts.length === 0 && topoVerts.length > 0) {
+        const step = Math.max(1, Math.floor(topoVerts.length / 64));
+        for (let i = 0; i < topoVerts.length; i += step) {
+            cornerVerts.push({
+                id: cornerVerts.length,
+                topoVertId: i,
+                position: topoVerts[i].position.clone(),
+                normal: topoVerts[i].position.clone().normalize()
+            });
+        }
+    }
+
+    return {
+        topoVerts,
+        triVerts,
+        triToFace,
+        logicalFaces,
+        featureEdges,
+        cornerVerts
+    };
+}
+
+function clearOverlays() {
+    if (!overlayGroup) return;
+    while (overlayGroup.children.length > 0) {
+        const c = overlayGroup.children[0];
+        overlayGroup.remove(c);
+        if (c.geometry) c.geometry.dispose();
+        if (c.material) c.material.dispose();
+    }
+    featureEdgeLines = null;
+    cornerPointsMesh = null;
+    selectionHighlightMesh = null;
+    hoverHighlightMesh = null;
+}
+
+function syncOverlayTransform() {
+    if (!overlayGroup || !activeEditMesh) return;
+    activeEditMesh.updateMatrixWorld(true);
+    overlayGroup.position.copy(activeEditMesh.position);
+    overlayGroup.quaternion.copy(activeEditMesh.quaternion);
+    overlayGroup.scale.copy(activeEditMesh.scale);
+    overlayGroup.updateMatrixWorld(true);
+}
+
+function rebuildBaseOverlays() {
+    clearOverlays();
+    if (!activeEditMesh || !topology) return;
+    syncOverlayTransform();
+
+    // 1. Always show clean CAD Feature Edges (including Inset subdivision edges, no internal triangle lines!)
+    const linePts = [];
+    for (const fe of topology.featureEdges) {
+        for (const [u, v] of fe.segments) {
+            linePts.push(topology.topoVerts[u].position.clone());
+            linePts.push(topology.topoVerts[v].position.clone());
+        }
+    }
+    if (linePts.length > 0) {
+        const lineGeo = new THREE.BufferGeometry().setFromPoints(linePts);
+        const lineMat = new THREE.LineBasicMaterial({
+            color: subMode === 'edge' ? 0x5da5f5 : 0x151515,
+            transparent: true,
+            opacity: subMode === 'edge' ? 0.95 : 0.75,
+            depthTest: true
+        });
+        featureEdgeLines = new THREE.LineSegments(lineGeo, lineMat);
+        featureEdgeLines.renderOrder = 901;
+        overlayGroup.add(featureEdgeLines);
+    }
+
+    // 2. In Vertex Mode, display crisp CAD corner handles
+    if (subMode === 'vertex' && topology.cornerVerts.length > 0) {
+        const pts = topology.cornerVerts.map(cv => cv.position);
+        const ptGeo = new THREE.BufferGeometry().setFromPoints(pts);
+        const ptMat = new THREE.PointsMaterial({
+            color: 0x5da5f5,
+            size: 8,
+            sizeAttenuation: false,
+            depthTest: false
+        });
+        cornerPointsMesh = new THREE.Points(ptGeo, ptMat);
+        cornerPointsMesh.renderOrder = 905;
+        overlayGroup.add(cornerPointsMesh);
+    }
+}
+
+function buildFeatureHighlightObject(feature, isHover = false) {
+    if (!feature || !topology || !activeEditMesh) return null;
+    const color = isHover ? 0x66ccff : 0xff9f1a;
+
+    if (feature.type === 'face') {
+        const face = topology.logicalFaces[feature.id];
+        if (!face) return null;
+        const group = new THREE.Group();
+
+        const posAttr = activeEditMesh.geometry.attributes.position;
+        const triVerts = new Float32Array(face.triangles.length * 9);
+        let offset = 0;
+        const nOffset = face.normal.clone().multiplyScalar(0.015);
+        for (const ti of face.triangles) {
+            for (let k = 0; k < 3; k++) {
+                const vi = ti * 3 + k;
+                triVerts[offset++] = posAttr.getX(vi) + nOffset.x;
+                triVerts[offset++] = posAttr.getY(vi) + nOffset.y;
+                triVerts[offset++] = posAttr.getZ(vi) + nOffset.z;
+            }
+        }
+        const fillGeo = new THREE.BufferGeometry();
+        fillGeo.setAttribute('position', new THREE.BufferAttribute(triVerts, 3));
+        const fillMat = new THREE.MeshBasicMaterial({
+            color,
+            transparent: true,
+            opacity: isHover ? 0.28 : 0.45,
+            side: THREE.DoubleSide,
+            depthTest: true,
+            depthWrite: false
+        });
+        const fillMesh = new THREE.Mesh(fillGeo, fillMat);
+        fillMesh.renderOrder = 902;
+        group.add(fillMesh);
+
+        const borderPts = [];
+        for (const [u, v] of face.boundaryEdges) {
+            borderPts.push(topology.topoVerts[u].position.clone().add(nOffset));
+            borderPts.push(topology.topoVerts[v].position.clone().add(nOffset));
+        }
+        if (borderPts.length > 0) {
+            const bGeo = new THREE.BufferGeometry().setFromPoints(borderPts);
+            const bMat = new THREE.LineBasicMaterial({ color, depthTest: false });
+            const bLines = new THREE.LineSegments(bGeo, bMat);
+            bLines.renderOrder = 903;
+            group.add(bLines);
+        }
+        return group;
+    } else if (feature.type === 'edge') {
+        const edge = topology.featureEdges[feature.id];
+        if (!edge) return null;
+        const pts = [];
+        for (const [u, v] of edge.segments) {
+            pts.push(topology.topoVerts[u].position.clone());
+            pts.push(topology.topoVerts[v].position.clone());
+        }
+        const geo = new THREE.BufferGeometry().setFromPoints(pts);
+        const mat = new THREE.LineBasicMaterial({ color, depthTest: false, linewidth: 3 });
+        const lines = new THREE.LineSegments(geo, mat);
+        lines.renderOrder = 904;
+        return lines;
+    } else if (feature.type === 'vertex') {
+        const cv = topology.cornerVerts[feature.id];
+        if (!cv) return null;
+        const tv = topology.topoVerts[cv.topoVertId];
+        const geo = new THREE.BufferGeometry().setFromPoints([tv.position.clone()]);
+        const mat = new THREE.PointsMaterial({
+            color,
+            size: isHover ? 11 : 13,
+            sizeAttenuation: false,
+            depthTest: false
+        });
+        const pt = new THREE.Points(geo, mat);
+        pt.renderOrder = 906;
+        return pt;
+    }
+    return null;
+}
+
+function disposeObject(obj) {
+    if (!obj) return;
+    obj.traverse(c => {
+        if (c.geometry) c.geometry.dispose();
+        if (c.material) c.material.dispose();
+    });
+}
+
+function updateSelectionHighlight() {
+    if (!overlayGroup) return;
+    if (selectionHighlightMesh) {
+        overlayGroup.remove(selectionHighlightMesh);
+        disposeObject(selectionHighlightMesh);
+        selectionHighlightMesh = null;
+    }
+    if (selectedFeature) {
+        selectionHighlightMesh = buildFeatureHighlightObject(selectedFeature, false);
+        if (selectionHighlightMesh) overlayGroup.add(selectionHighlightMesh);
+    }
+}
+
+function updateHoverHighlight() {
+    if (!overlayGroup) return;
+    if (hoverHighlightMesh) {
+        overlayGroup.remove(hoverHighlightMesh);
+        disposeObject(hoverHighlightMesh);
+        hoverHighlightMesh = null;
+    }
+    if (hoveredFeature && (!selectedFeature || hoveredFeature.type !== selectedFeature.type || hoveredFeature.id !== selectedFeature.id)) {
+        hoverHighlightMesh = buildFeatureHighlightObject(hoveredFeature, true);
+        if (hoverHighlightMesh) overlayGroup.add(hoverHighlightMesh);
+    }
+}
+function pickEditFeature(raycaster, mouse, camera) {
+    if (!activeEditMesh || !topology) return null;
+    activeEditMesh.updateMatrixWorld(true);
+
+    if (subMode === 'face') {
+        raycaster.setFromCamera(mouse, camera);
+        const hits = raycaster.intersectObject(activeEditMesh, false);
+        if (hits.length > 0 && hits[0].faceIndex !== undefined) {
+            const fid = topology.triToFace[hits[0].faceIndex];
+            if (fid !== undefined && fid >= 0) {
+                return { type: 'face', id: fid };
+            }
+        }
+        return null;
+    }
+
+    if (subMode === 'vertex') {
+        let bestId = -1;
+        let bestDistPx = 18;
+        const mousePx = new THREE.Vector2(
+            (mouse.x * 0.5 + 0.5) * window.innerWidth,
+            (-mouse.y * 0.5 + 0.5) * window.innerHeight
+        );
+        const proj = new THREE.Vector3();
+
+        for (const cv of topology.cornerVerts) {
+            const tv = topology.topoVerts[cv.topoVertId];
+            proj.copy(tv.position).applyMatrix4(activeEditMesh.matrixWorld).project(camera);
+            if (proj.z > 1) continue;
+            const sx = (proj.x * 0.5 + 0.5) * window.innerWidth;
+            const sy = (-proj.y * 0.5 + 0.5) * window.innerHeight;
+            const d = Math.hypot(sx - mousePx.x, sy - mousePx.y);
+            if (d < bestDistPx) {
+                bestDistPx = d;
+                bestId = cv.id;
+            }
+        }
+        return bestId >= 0 ? { type: 'vertex', id: bestId } : null;
+    }
+
+    if (subMode === 'edge') {
+        let bestId = -1;
+        let bestDistPx = 14;
+        const mousePx = new THREE.Vector2(
+            (mouse.x * 0.5 + 0.5) * window.innerWidth,
+            (-mouse.y * 0.5 + 0.5) * window.innerHeight
+        );
+        const pA = new THREE.Vector3();
+        const pB = new THREE.Vector3();
+        const a2 = new THREE.Vector2();
+        const b2 = new THREE.Vector2();
+
+        for (const fe of topology.featureEdges) {
+            for (const [u, v] of fe.segments) {
+                pA.copy(topology.topoVerts[u].position).applyMatrix4(activeEditMesh.matrixWorld).project(camera);
+                pB.copy(topology.topoVerts[v].position).applyMatrix4(activeEditMesh.matrixWorld).project(camera);
+                if (pA.z > 1 && pB.z > 1) continue;
+                a2.set((pA.x * 0.5 + 0.5) * window.innerWidth, (-pA.y * 0.5 + 0.5) * window.innerHeight);
+                b2.set((pB.x * 0.5 + 0.5) * window.innerWidth, (-pB.y * 0.5 + 0.5) * window.innerHeight);
+                const d = distToSegment2D(mousePx, a2, b2);
+                if (d < bestDistPx) {
+                    bestDistPx = d;
+                    bestId = fe.id;
+                }
+            }
+        }
+        return bestId >= 0 ? { type: 'edge', id: bestId } : null;
+    }
+
+    return null;
+}
+
+function distToSegment2D(p, v, w) {
+    const l2 = v.distanceToSquared(w);
+    if (l2 === 0) return p.distanceTo(v);
+    let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+    t = Math.max(0, Math.min(1, t));
+    const projX = v.x + t * (w.x - v.x);
+    const projY = v.y + t * (w.y - v.y);
+    return Math.hypot(p.x - projX, p.y - projY);
+}
+function updateEditHover(raycaster, mouse, camera) {
+    if (!activeEditMesh || !topology || dragState) return;
+    const hit = pickEditFeature(raycaster, mouse, camera);
+    const changed = (!hoveredFeature && hit) || (hoveredFeature && !hit) ||
+        (hoveredFeature && hit && (hoveredFeature.type !== hit.type || hoveredFeature.id !== hit.id));
+    if (changed) {
+        hoveredFeature = hit;
+        updateHoverHighlight();
+    }
+}
+function selectEditFeature(feature, transform) {
+    selectedFeature = feature;
+    updateSelectionHighlight();
+    updateHoverHighlight();
+
+    if (!selectedFeature || !activeEditMesh || !topology) {
+        if (transform) transform.detach();
+        return null;
+    }
+
+    positionProxyOnSelectedFeature();
+    if (transform) {
+        transform.setSpace('local');
+        transform.attach(editProxy);
+    }
+    return selectedFeature;
+}
+
+function positionProxyOnSelectedFeature() {
+    if (!selectedFeature || !activeEditMesh || !topology) return;
+    activeEditMesh.updateMatrixWorld(true);
+
+    let localCenter = new THREE.Vector3();
+    let localNormal = new THREE.Vector3(0, 0, 1);
+    let localTangent = new THREE.Vector3(1, 0, 0);
+
+    if (selectedFeature.type === 'face') {
+        const face = topology.logicalFaces[selectedFeature.id];
+        if (!face) return;
+        localCenter.copy(face.center);
+        localNormal.copy(face.normal);
+        const refUp = Math.abs(localNormal.z) < 0.9 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0);
+        localTangent.crossVectors(refUp, localNormal).normalize();
+    } else if (selectedFeature.type === 'edge') {
+        const edge = topology.featureEdges[selectedFeature.id];
+        if (!edge) return;
+        localCenter.copy(edge.center);
+        localNormal.copy(edge.normal);
+        localTangent.copy(edge.direction);
+        localTangent.addScaledVector(localNormal, -localTangent.dot(localNormal)).normalize();
+        if (localTangent.lengthSq() < 1e-4) localTangent.set(1, 0, 0);
+    } else if (selectedFeature.type === 'vertex') {
+        const cv = topology.cornerVerts[selectedFeature.id];
+        if (!cv) return;
+        localCenter.copy(topology.topoVerts[cv.topoVertId].position);
+        localNormal.copy(cv.normal);
+        const refUp = Math.abs(localNormal.z) < 0.9 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0);
+        localTangent.crossVectors(refUp, localNormal).normalize();
+    }
+
+    const localBitangent = new THREE.Vector3().crossVectors(localNormal, localTangent).normalize();
+    localTangent.crossVectors(localBitangent, localNormal).normalize();
+
+    const localRotMat = new THREE.Matrix4().makeBasis(localTangent, localBitangent, localNormal);
+    const localQuat = new THREE.Quaternion().setFromRotationMatrix(localRotMat);
+
+    const worldPos = localCenter.clone().applyMatrix4(activeEditMesh.matrixWorld);
+    const worldQuat = activeEditMesh.quaternion.clone().multiply(localQuat);
+
+    editProxy.position.copy(worldPos);
+    editProxy.quaternion.copy(worldQuat);
+    editProxy.scale.set(1, 1, 1);
+    editProxy.updateMatrixWorld(true);
+}
+
+/**
+ * Duplicates a Logical Face's boundary and stitches new side-wall / inset-ring triangles.
+ * Assigns distinct face group IDs to the inner cap and each surrounding side/inset quad
+ * so coplanar Inset subdivisions stay separate and visible!
+ */
+function spawnExtrudeGeometryForFace(faceId, isInset = false) {
+    const face = topology.logicalFaces[faceId];
+    if (!face || !activeEditMesh) return null;
+
+    const oldPosAttr = activeEditMesh.geometry.attributes.position;
+    const oldCount = oldPosAttr.count;
+    const oldTriCount = Math.floor(oldCount / 3);
+    const numWallTris = face.boundaryEdges.length * 2;
+    const newPositions = new Float32Array((oldCount + numWallTris * 3) * 3);
+
+    newPositions.set(oldPosAttr.array, 0);
+
+    // Prepare updated triangle group IDs so Inset frame quads & inner cap stay distinct even when coplanar!
+    const oldGroups = Array.isArray(activeEditMesh.userData.triGroupIds) && activeEditMesh.userData.triGroupIds.length === oldTriCount
+        ? activeEditMesh.userData.triGroupIds
+        : Array.from(topology.triToFace);
+    let nextGroupId = oldGroups.reduce((m, v) => Math.max(m, v), 0) + 1;
+    const newGroups = oldGroups.slice();
+
+    const capGroupId = nextGroupId++;
+    for (const ti of face.triangles) {
+        newGroups[ti] = capGroupId;
+    }
+
+    // For Inset, slightly shrink the initial cap inward by 0.2% so its vertices are distinct from the outer ring
+    // while staying 100% coplanar with the face! For Extrude, offset by 0.002mm along normal.
+    const displacedPosMap = new Map();
+    if (isInset) {
+        for (const tvId of face.topoVertIds) {
+            const orig = topology.topoVerts[tvId].position;
+            const toCenter = new THREE.Vector3().subVectors(orig, face.center).multiplyScalar(0.995).add(face.center);
+            displacedPosMap.set(tvId, toCenter);
+        }
+    } else {
+        const eps = face.normal.clone().multiplyScalar(0.002);
+        for (const tvId of face.topoVertIds) {
+            displacedPosMap.set(tvId, topology.topoVerts[tvId].position.clone().add(eps));
+        }
+    }
+
+    for (const ti of face.triangles) {
+        const [v0, v1, v2] = topology.triVerts[ti];
+        const p0 = displacedPosMap.get(v0);
+        const p1 = displacedPosMap.get(v1);
+        const p2 = displacedPosMap.get(v2);
+        const baseIdx = ti * 9;
+        newPositions[baseIdx]     = p0.x; newPositions[baseIdx + 1] = p0.y; newPositions[baseIdx + 2] = p0.z;
+        newPositions[baseIdx + 3] = p1.x; newPositions[baseIdx + 4] = p1.y; newPositions[baseIdx + 5] = p1.z;
+        newPositions[baseIdx + 6] = p2.x; newPositions[baseIdx + 7] = p2.y; newPositions[baseIdx + 8] = p2.z;
+    }
+
+    // Group collinear boundary edges so each straight side of the inset/extrusion shares a clean quad group ID
+    let writeOffset = oldCount * 3;
+    const pushVert = (v) => {
+        newPositions[writeOffset++] = v.x;
+        newPositions[writeOffset++] = v.y;
+        newPositions[writeOffset++] = v.z;
+    };
+
+    const dirGroups = [];
+    for (const [u, v] of face.boundaryEdges) {
+        const uOld = topology.topoVerts[u].position;
+        const vOld = topology.topoVerts[v].position;
+        const uNew = displacedPosMap.get(u);
+        const vNew = displacedPosMap.get(v);
+
+        const edgeDir = new THREE.Vector3().subVectors(vOld, uOld).normalize();
+        let assignedGroup = -1;
+        for (const dg of dirGroups) {
+            if (dg.dir.dot(edgeDir) > 0.992 && (dg.verts.has(u) || dg.verts.has(v))) {
+                assignedGroup = dg.groupId;
+                dg.verts.add(u);
+                dg.verts.add(v);
+                break;
+            }
+        }
+        if (assignedGroup === -1) {
+            assignedGroup = nextGroupId++;
+            dirGroups.push({ dir: edgeDir, groupId: assignedGroup, verts: new Set([u, v]) });
+        }
+
+        // Triangle 1: (uOld, vOld, vNew)
+        pushVert(uOld); pushVert(vOld); pushVert(vNew);
+        newGroups.push(assignedGroup);
+        // Triangle 2: (uOld, vNew, uNew)
+        pushVert(uOld); pushVert(vNew); pushVert(uNew);
+        newGroups.push(assignedGroup);
+    }
+
+    const newGeo = new THREE.BufferGeometry();
+    newGeo.setAttribute('position', new THREE.BufferAttribute(newPositions, 3));
+    newGeo.computeVertexNormals();
+    newGeo.computeBoundingBox();
+    newGeo.computeBoundingSphere();
+
+    activeEditMesh.geometry.dispose();
+    activeEditMesh.geometry = newGeo;
+    activeEditMesh.userData.triGroupIds = newGroups;
+    topology = buildTopology(activeEditMesh.geometry, activeEditMesh);
+
+    const firstTri = face.triangles[0];
+    const newFaceId = topology.triToFace[firstTri];
+    selectedFeature = { type: 'face', id: newFaceId };
+    return topology.logicalFaces[newFaceId];
+}
+
+/**
+ * Splits a sharp Feature Edge into a 45-degree Chamfer / Bevel Face and stitches side faces cleanly.
+ * Returns bevel drag metadata so dragging the gizmo widens or narrows the bevel in real time.
+ */
+function spawnBevelGeometryForEdge(edgeId) {
+    const edge = topology.featureEdges[edgeId];
+    if (!edge || !activeEditMesh) return null;
+    const [f0, f1] = edge.faces;
+    if (f0 < 0 || f1 < 0) return null;
+
+    const face0 = topology.logicalFaces[f0];
+    const face1 = topology.logicalFaces[f1];
+    if (!face0 || !face1) return null;
+
+    const edgeVertSet = new Set(edge.topoVertIds);
+
+    // Determine canonical edge direction along face0's boundary winding
+    let dir0 = edge.direction.clone();
+    for (const [a, b] of face0.boundaryEdges) {
+        if (edgeVertSet.has(a) && edgeVertSet.has(b)) {
+            dir0.subVectors(topology.topoVerts[b].position, topology.topoVerts[a].position).normalize();
+            break;
+        }
+    }
+
+    // In-plane unit vectors pointing inward into face0 and face1 perpendicular to the beveled edge
+    const in0 = new THREE.Vector3().crossVectors(face0.normal, dir0).normalize();
+    const in1 = new THREE.Vector3().crossVectors(dir0, face1.normal).normalize();
+
+    let maxBevelDist = Infinity;
+    const slideMap0 = new Map();
+    const slideMap1 = new Map();
+    const origPosMap = new Map();
+
+    for (const w of edge.topoVertIds) {
+        const wPos = topology.topoVerts[w].position.clone();
+        origPosMap.set(w, wPos);
+
+        let s0 = in0.clone();
+        for (const [a, b] of face0.boundaryEdges) {
+            const other = (a === w && !edgeVertSet.has(b)) ? b : ((b === w && !edgeVertSet.has(a)) ? a : -1);
+            if (other >= 0) {
+                const vec = new THREE.Vector3().subVectors(topology.topoVerts[other].position, wPos);
+                const len = vec.length();
+                if (len > 1e-4) {
+                    const dir = vec.normalize();
+                    const cos = Math.max(0.25, dir.dot(in0));
+                    s0 = dir.multiplyScalar(1 / cos);
+                    maxBevelDist = Math.min(maxBevelDist, len * cos * 0.85);
+                }
+                break;
+            }
+        }
+        slideMap0.set(w, s0);
+
+        let s1 = in1.clone();
+        for (const [a, b] of face1.boundaryEdges) {
+            const other = (a === w && !edgeVertSet.has(b)) ? b : ((b === w && !edgeVertSet.has(a)) ? a : -1);
+            if (other >= 0) {
+                const vec = new THREE.Vector3().subVectors(topology.topoVerts[other].position, wPos);
+                const len = vec.length();
+                if (len > 1e-4) {
+                    const dir = vec.normalize();
+                    const cos = Math.max(0.25, dir.dot(in1));
+                    s1 = dir.multiplyScalar(1 / cos);
+                    maxBevelDist = Math.min(maxBevelDist, len * cos * 0.85);
+                }
+                break;
+            }
+        }
+        slideMap1.set(w, s1);
+    }
+
+    if (!isFinite(maxBevelDist) || maxBevelDist <= 0.05) maxBevelDist = 10;
+
+    // Initial tiny offset (0.005mm) so w0 and w1 weld as distinct topological vertices
+    const initEps = 0.005;
+    const pos0Map = new Map();
+    const pos1Map = new Map();
+    for (const w of edge.topoVertIds) {
+        const orig = origPosMap.get(w);
+        pos0Map.set(w, orig.clone().addScaledVector(slideMap0.get(w), initEps));
+        pos1Map.set(w, orig.clone().addScaledVector(slideMap1.get(w), initEps));
+    }
+
+    // Identify side-face corner stitch triangles along face1's boundary edges incident to edgeVertSet
+    const stitchTris = [];
+    const oldPosAttr = activeEditMesh.geometry.attributes.position;
+    const oldCount = oldPosAttr.count;
+    const oldTriCount = Math.floor(oldCount / 3);
+    const oldGroups = Array.isArray(activeEditMesh.userData.triGroupIds) && activeEditMesh.userData.triGroupIds.length === oldTriCount
+        ? activeEditMesh.userData.triGroupIds
+        : Array.from(topology.triToFace);
+    let nextGroupId = oldGroups.reduce((m, v) => Math.max(m, v), 0) + 1;
+
+    const findSideGroupId = (w, a) => {
+        for (let t = 0; t < oldTriCount; t++) {
+            const tf = topology.triToFace[t];
+            if (tf === f0 || tf === f1) continue;
+            const tv = topology.triVerts[t];
+            if (tv.includes(w) && tv.includes(a)) return oldGroups[t];
+        }
+        return nextGroupId++;
+    };
+
+    for (const [x, y] of face1.boundaryEdges) {
+        if (edgeVertSet.has(x) && !edgeVertSet.has(y)) {
+            const w = x, a = y;
+            stitchTris.push({
+                pA: pos0Map.get(w),
+                pB: topology.topoVerts[a].position.clone(),
+                pC: pos1Map.get(w),
+                groupId: findSideGroupId(w, a)
+            });
+        } else if (!edgeVertSet.has(x) && edgeVertSet.has(y)) {
+            const a = x, w = y;
+            stitchTris.push({
+                pA: pos0Map.get(w),
+                pB: pos1Map.get(w),
+                pC: topology.topoVerts[a].position.clone(),
+                groupId: findSideGroupId(w, a)
+            });
+        }
+    }
+
+    const numBevelTris = edge.segments.length * 2;
+    const totalNewTris = numBevelTris + stitchTris.length;
+    const newPositions = new Float32Array((oldCount + totalNewTris * 3) * 3);
+    newPositions.set(oldPosAttr.array, 0);
+    const newGroups = oldGroups.slice();
+
+    // Update existing triangles: triangles in face1 use pos1Map; all others use pos0Map
+    for (let t = 0; t < oldTriCount; t++) {
+        const isF1 = (topology.triToFace[t] === f1);
+        const tv = topology.triVerts[t];
+        for (let k = 0; k < 3; k++) {
+            const vid = tv[k];
+            if (edgeVertSet.has(vid)) {
+                const p = isF1 ? pos1Map.get(vid) : pos0Map.get(vid);
+                const idx = (t * 3 + k) * 3;
+                newPositions[idx]     = p.x;
+                newPositions[idx + 1] = p.y;
+                newPositions[idx + 2] = p.z;
+            }
+        }
+    }
+
+    let writeOffset = oldCount * 3;
+    const pushVert = (v) => {
+        newPositions[writeOffset++] = v.x;
+        newPositions[writeOffset++] = v.y;
+        newPositions[writeOffset++] = v.z;
+    };
+
+    const bevelGroupId = nextGroupId++;
+    const firstBevelTriIdx = oldTriCount;
+
+    for (const [segU, segV] of edge.segments) {
+        const segVec = new THREE.Vector3().subVectors(
+            topology.topoVerts[segV].position,
+            topology.topoVerts[segU].position
+        );
+        const [u, v] = segVec.dot(dir0) >= 0 ? [segU, segV] : [segV, segU];
+        const u0 = pos0Map.get(u), u1 = pos1Map.get(u);
+        const v0 = pos0Map.get(v), v1 = pos1Map.get(v);
+
+        // Quad triangles for the new Bevel Face
+        pushVert(u0); pushVert(u1); pushVert(v1);
+        newGroups.push(bevelGroupId);
+
+        pushVert(u0); pushVert(v1); pushVert(v0);
+        newGroups.push(bevelGroupId);
+    }
+
+    // Append side-face corner stitch triangles
+    for (const st of stitchTris) {
+        pushVert(st.pA); pushVert(st.pB); pushVert(st.pC);
+        newGroups.push(st.groupId);
+    }
+
+    const newGeo = new THREE.BufferGeometry();
+    newGeo.setAttribute('position', new THREE.BufferAttribute(newPositions, 3));
+    newGeo.computeVertexNormals();
+    newGeo.computeBoundingBox();
+    newGeo.computeBoundingSphere();
+
+    activeEditMesh.geometry.dispose();
+    activeEditMesh.geometry = newGeo;
+    activeEditMesh.userData.triGroupIds = newGroups;
+    topology = buildTopology(activeEditMesh.geometry, activeEditMesh);
+
+    const findNearestTopoVert = (targetPos) => {
+        let bestId = 0;
+        let bestD = Infinity;
+        for (const tv of topology.topoVerts) {
+            const d = tv.position.distanceToSquared(targetPos);
+            if (d < bestD) {
+                bestD = d;
+                bestId = tv.id;
+            }
+        }
+        return bestId;
+    };
+
+    const bevelPairs = [];
+    for (const w of edge.topoVertIds) {
+        bevelPairs.push({
+            tv0: findNearestTopoVert(pos0Map.get(w)),
+            tv1: findNearestTopoVert(pos1Map.get(w)),
+            originPos: origPosMap.get(w),
+            slideVec0: slideMap0.get(w),
+            slideVec1: slideMap1.get(w)
+        });
+    }
+
+    const bevelFaceId = topology.triToFace[firstBevelTriIdx];
+    selectedFeature = { type: 'face', id: bevelFaceId };
+    return {
+        bevelFaceId,
+        bevelPairs,
+        maxBevelDist
+    };
+}
+function beginEditGizmoDrag() {
+    if (!activeEditMesh || !topology || !selectedFeature) return;
+
+    const isInset = actionMode === 'inset' && selectedFeature.type === 'face';
+    const isExtrude = actionMode === 'extrude' && selectedFeature.type === 'face';
+    const isBevel = actionMode === 'bevel' && selectedFeature.type === 'edge';
+
+    let bevelInfo = null;
+    if (isBevel) {
+        bevelInfo = spawnBevelGeometryForEdge(selectedFeature.id);
+        rebuildBaseOverlays();
+        updateSelectionHighlight();
+    } else if (isInset || isExtrude) {
+        spawnExtrudeGeometryForFace(selectedFeature.id, isInset);
+        rebuildBaseOverlays();
+        updateSelectionHighlight();
+    }
+
+    let targetTopoVertIds = [];
+    if (selectedFeature.type === 'face') {
+        const face = topology.logicalFaces[selectedFeature.id];
+        if (face) {
+            targetTopoVertIds = (isInset || isExtrude)
+                ? [...face.topoVertIds]
+                : [...(face.allMoveVertIds || face.topoVertIds)];
+        }
+    } else if (selectedFeature.type === 'edge') {
+        const edge = topology.featureEdges[selectedFeature.id];
+        if (edge) targetTopoVertIds = [...edge.topoVertIds];
+    } else if (selectedFeature.type === 'vertex') {
+        const cv = topology.cornerVerts[selectedFeature.id];
+        if (cv) targetTopoVertIds = [cv.topoVertId];
+    }
+
+    activeEditMesh.updateMatrixWorld(true);
+    editProxy.updateMatrixWorld(true);
+
+    const startPositions = new Map();
+    const faceCenter = new THREE.Vector3();
+    for (const tvId of targetTopoVertIds) {
+        const p = topology.topoVerts[tvId].position.clone();
+        startPositions.set(tvId, p);
+        faceCenter.add(p);
+    }
+    if (targetTopoVertIds.length > 0) faceCenter.divideScalar(targetTopoVertIds.length);
+
+    let avgRadius = 0;
+    startPositions.forEach(p => { avgRadius += p.distanceTo(faceCenter); });
+    avgRadius = Math.max(0.5, avgRadius / (startPositions.size || 1));
+
+    dragState = {
+        targetTopoVertIds,
+        startPositions,
+        faceCenter,
+        avgRadius,
+        proxyStartMatrixWorld: editProxy.matrixWorld.clone(),
+        proxyStartMatrixWorldInv: editProxy.matrixWorld.clone().invert(),
+        proxyStartPos: editProxy.position.clone(),
+        proxyStartQuatInv: editProxy.quaternion.clone().invert(),
+        meshMatrixWorld: activeEditMesh.matrixWorld.clone(),
+        meshMatrixWorldInv: activeEditMesh.matrixWorld.clone().invert(),
+        wasInset: isInset,
+        wasBevel: isBevel && bevelInfo !== null,
+        bevelInfo
+    };
+}
+function updateEditGizmoDrag(camera, currentUnit) {
+    if (!dragState || !activeEditMesh || !topology) return;
+
+    editProxy.updateMatrixWorld(true);
+
+    const deltaWorld = new THREE.Matrix4().multiplyMatrices(editProxy.matrixWorld, dragState.proxyStartMatrixWorldInv);
+    const deltaLocal = new THREE.Matrix4()
+        .multiplyMatrices(dragState.meshMatrixWorldInv, deltaWorld)
+        .multiply(dragState.meshMatrixWorld);
+
+    const localDragVec = editProxy.position.clone().sub(dragState.proxyStartPos).applyQuaternion(dragState.proxyStartQuatInv);
+    const posAttr = activeEditMesh.geometry.attributes.position;
+    const tempV = new THREE.Vector3();
+
+    if (dragState.wasBevel && dragState.bevelInfo) {
+        const dragMag = localDragVec.length();
+        const bevelDist = Math.max(0.01, Math.min(dragState.bevelInfo.maxBevelDist, dragMag));
+
+        for (const pair of dragState.bevelInfo.bevelPairs) {
+            tempV.copy(pair.originPos).addScaledVector(pair.slideVec0, bevelDist);
+            const tv0 = topology.topoVerts[pair.tv0];
+            tv0.position.copy(tempV);
+            for (const ai of tv0.attrIndices) {
+                posAttr.setXYZ(ai, tempV.x, tempV.y, tempV.z);
+            }
+
+            tempV.copy(pair.originPos).addScaledVector(pair.slideVec1, bevelDist);
+            const tv1 = topology.topoVerts[pair.tv1];
+            tv1.position.copy(tempV);
+            for (const ai of tv1.attrIndices) {
+                posAttr.setXYZ(ai, tempV.x, tempV.y, tempV.z);
+            }
+        }
+        showDragBadge(`Bevel: ${formatVal(bevelDist, currentUnit)} ${currentUnit}`, dragState.proxyStartPos, camera);
+    } else if (dragState.wasInset) {
+        // Any drag distance on X, Y, or Z smoothly insets the selected face toward its center!
+        const dragMag = localDragVec.length();
+        const insetDist = Math.min(dragState.avgRadius * 0.92, dragMag);
+        const scaleFactor = Math.max(0.08, (dragState.avgRadius - insetDist) / dragState.avgRadius);
+
+        for (const tvId of dragState.targetTopoVertIds) {
+            const startP = dragState.startPositions.get(tvId);
+            tempV.copy(startP).sub(dragState.faceCenter).multiplyScalar(scaleFactor).add(dragState.faceCenter);
+            const tv = topology.topoVerts[tvId];
+            tv.position.copy(tempV);
+            for (const ai of tv.attrIndices) {
+                posAttr.setXYZ(ai, tempV.x, tempV.y, tempV.z);
+            }
+        }
+        showDragBadge(`Inset: ${formatVal(insetDist, currentUnit)} ${currentUnit}`, dragState.proxyStartPos, camera);
+    } else {
+        for (const tvId of dragState.targetTopoVertIds) {
+            const startP = dragState.startPositions.get(tvId);
+            tempV.copy(startP).applyMatrix4(deltaLocal);
+            const tv = topology.topoVerts[tvId];
+            tv.position.copy(tempV);
+            for (const ai of tv.attrIndices) {
+                posAttr.setXYZ(ai, tempV.x, tempV.y, tempV.z);
+            }
+        }
+
+        const dist = editProxy.position.distanceTo(dragState.proxyStartPos);
+        const sign = localDragVec.z >= -1e-3 ? '+' : '-';
+        const modeLabel = actionMode === 'extrude' ? 'Extrude' : 'Pull';
+        showDragBadge(`${modeLabel}: ${sign}${formatVal(dist, currentUnit)} ${currentUnit}`, editProxy.position, camera);
+    }
+
+    posAttr.needsUpdate = true;
+    activeEditMesh.geometry.computeVertexNormals();
+    activeEditMesh.geometry.computeBoundingBox();
+    activeEditMesh.geometry.computeBoundingSphere();
+
+    if (selectedFeature && selectedFeature.type === 'face') {
+        const face = topology.logicalFaces[selectedFeature.id];
+        if (face) {
+            face.center.set(0, 0, 0);
+            face.topoVertIds.forEach(id => face.center.add(topology.topoVerts[id].position));
+            face.center.divideScalar(face.topoVertIds.length || 1);
+        }
+    }
+    rebuildBaseOverlays();
+    updateSelectionHighlight();
+}
+function endEditGizmoDrag() {
+    if (!dragState || !activeEditMesh) return null;
+    const wasInset = dragState.wasInset;
+    const wasBevel = dragState.wasBevel;
+    dragState = null;
+    hideDragBadge();
+    rebuildEditTopology();
+
+    if (wasBevel) {
+        selectedFeature = null;
+        updateSelectionHighlight();
+        return 'bevel_complete';
+    }
+
+    positionProxyOnSelectedFeature();
+
+    if (wasInset) {
+        actionMode = 'extrude';
+        return 'switched_to_extrude';
+    }
+    return null;
+}
+
+function showDragBadge(text, worldPos, camera) {
+    const badge = document.getElementById('edit-drag-badge');
+    if (!badge || !camera) return;
+    const p = worldPos.clone().project(camera);
+    const x = (p.x * 0.5 + 0.5) * window.innerWidth;
+    const y = (-p.y * 0.5 + 0.5) * window.innerHeight;
+    badge.style.display = 'block';
+    badge.style.left = `${x + 24}px`;
+    badge.style.top = `${y - 24}px`;
+    badge.innerText = text;
+}
+
+function hideDragBadge() {
+    const badge = document.getElementById('edit-drag-badge');
+    if (badge) badge.style.display = 'none';
 }
 
 // === js/tools.js ===
@@ -2343,11 +3980,13 @@ let isSnapping = false;
 let currentSpace = 'world';
 let keymapMode = 'cad'; // 'cad' or 'blender'
 let inspectorEditCommitted = false;
+let booleanHoverOp = null; // 'union' | 'subtract' | 'intersect' | null
 
 window.createShape = createShape;
 window.performBoolean = performBoolean;
 window.toggleCutterMode = toggleCutterMode;
 window.swapBooleanOrder = swapBooleanOrder;
+window.setBooleanHoverOp = setBooleanHoverOp;
 window.mirrorSelected = mirrorSelected;
 window.groupSelected = groupSelected;
 window.alignObjects = (axis, type) => { if (selection.length < 2) return alert("Select at least 2 objects to align."); pushToUndo(); alignObjects(selection, axis, type); updateInspectorUI(selection[selection.length - 1]); document.getElementById('status-text').innerText = `Aligned ${axis.toUpperCase()} to ${type}`; };
@@ -2362,6 +4001,7 @@ window.updateObjectFromUI = updateObjectFromUI;
 window.handleDropButton = handleDropButton;
 window.toggleTheme = toggleTheme;
 window.updateLighting = (val) => updateLighting(val, scene);
+window.toggleLightingMode = () => toggleLightingMode(scene);
 window.toggleDimensions = toggleDimensions;
 window.exportSTL = () => exportSTL(objects.filter(o => o.visible));
 window.exportSelectedSTL = () => { if (selection.length > 0) exportSTL(selection); else alert('Select objects to export!'); };
@@ -2393,6 +4033,10 @@ window.openModifyModal = openModifyModal;
 window.closeModifyModal = closeModifyModal;
 window.confirmModifyModal = confirmModifyModal;
 window.startInteractiveExtrudePick = startInteractiveExtrudePick;
+window.toggleEditMode = toggleEditMode;
+window.isEditMode = isEditModeActive;
+window.switchEditSubMode = switchEditSubMode;
+window.switchEditActionMode = switchEditActionMode;
 window.toggleKeymap = toggleKeymap;
 window.unhideAll = unhideAll;
 window.toggleSpace = toggleSpace;
@@ -2419,6 +4063,7 @@ function init() {
     orbit = setup.orbit;
     transform = setup.transform;
     rulerGroup = setup.rulerGroup;
+    initEditMode(scene);
     
     renderer.autoClear = false;
     clock = new THREE.Clock();
@@ -2453,8 +4098,26 @@ function init() {
     compassDiv.addEventListener('pointerdown', (e) => e.stopPropagation());
     compassDiv.addEventListener('pointerup', (e) => { e.stopPropagation(); viewHelper.handleClick(e); });
 
-    transform.addEventListener('mouseDown', () => pushToUndo());
+    transform.addEventListener('mouseDown', () => {
+        pushToUndo();
+        if (isEditModeActive()) {
+            beginEditGizmoDrag();
+        }
+    });
     transform.addEventListener('mouseUp', () => {
+        if (isEditModeActive()) {
+            const res = endEditGizmoDrag();
+            if (res === 'switched_to_extrude') {
+                switchEditActionMode('extrude');
+                document.getElementById('status-text').innerText = "Inset complete! Now drag Gizmo to Extrude out or in";
+            } else if (res === 'bevel_complete') {
+                transform.detach();
+                document.getElementById('status-text').innerText = "Edge Bevel complete! Click another Edge to Bevel or choose an Action";
+            }
+            refreshSelectionHelpers();
+            if (selection.length > 0) updateInspectorUI(selection[selection.length - 1]);
+            return;
+        }
         if (selection.length > 0) {
             updateInspectorUI(selection[selection.length - 1]);
             updateSelectionStatus();
@@ -2462,6 +4125,14 @@ function init() {
     });
     transform.addEventListener('dragging-changed', (e) => orbit.enabled = !e.value);
     transform.addEventListener('change', () => { 
+        if (isEditModeActive()) {
+            if (transform.dragging) {
+                updateEditGizmoDrag(camera, currentUnit);
+                refreshSelectionHelpers();
+                if (selection.length > 0) updateInspectorUI(selection[selection.length - 1]);
+            }
+            return;
+        }
         // LIVE DRAG VERTEX SNAPPING 
         if (transform.dragging && transform.mode === 'translate' && isVertexSnapping && selection.length > 0) {
             raycaster.setFromCamera(mouse, camera);
@@ -2551,13 +4222,22 @@ function init() {
     renderer.domElement.addEventListener('pointerdown', (e) => {
         if (e.button === 1) {
             e.preventDefault();
-            if (e.ctrlKey || e.metaKey) orbit.mouseButtons.MIDDLE = THREE.MOUSE.DOLLY;
-            else orbit.mouseButtons.MIDDLE = THREE.MOUSE.ROTATE;
+            if (e.ctrlKey || e.metaKey) {
+                orbit.mouseButtons.MIDDLE = THREE.MOUSE.DOLLY;
+            } else {
+                // When rotating the view with MMB (without Shift pan), exit Orthographic back to User Perspective
+                if (!e.shiftKey && isOrtho) toggleCamera();
+                orbit.mouseButtons.MIDDLE = THREE.MOUSE.ROTATE;
+            }
         } else if (e.button === 0) {
             if (e.altKey) {
                 // Blender "Emulate 3 Button Mouse" (Alt + LMB = Orbit, Shift + Alt + LMB = Pan, Ctrl + Alt + LMB = Zoom)
-                if (e.ctrlKey || e.metaKey) orbit.mouseButtons.LEFT = THREE.MOUSE.DOLLY;
-                else orbit.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
+                if (e.ctrlKey || e.metaKey) {
+                    orbit.mouseButtons.LEFT = THREE.MOUSE.DOLLY;
+                } else {
+                    if (!e.shiftKey && isOrtho) toggleCamera();
+                    orbit.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
+                }
             } else {
                 orbit.mouseButtons.LEFT = null;
             }
@@ -2569,7 +4249,7 @@ function init() {
             closeContextMenu();
         }
         pointerDownPosition.set(e.clientX, e.clientY);
-        if (e.button === 0 && !e.altKey && !transform.dragging && transform.axis === null && !rulerActive && !dropSurfaceActive && !extrudePickActive && !e.target.closest('.panel') && !e.target.closest('#compass-div') && !e.target.closest('#context-menu')) {
+        if (e.button === 0 && !e.altKey && !isEditModeActive() && !transform.dragging && transform.axis === null && !rulerActive && !dropSurfaceActive && !extrudePickActive && !e.target.closest('.panel') && !e.target.closest('#compass-div') && !e.target.closest('#context-menu') && !e.target.closest('#edit-mode-bar')) {
             marqueeCandidate = true;
             marqueeStart.set(e.clientX, e.clientY);
             marqueeElem.style.left = e.clientX + 'px';
@@ -2590,6 +4270,9 @@ function init() {
         mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
         document.body.style.cursor = (rulerActive || dropSurfaceActive || extrudePickActive) ? 'crosshair' : (transform.axis ? 'pointer' : 'default');
+        if (isEditModeActive() && !transform.dragging) {
+            updateEditHover(raycaster, mouse, camera);
+        }
         if (marqueeCandidate && !isMarquee) {
             if (Math.hypot(e.clientX - marqueeStart.x, e.clientY - marqueeStart.y) > 4) {
                 isMarquee = true;
@@ -2726,6 +4409,7 @@ function applySelectedTransform(type) {
 }
 
 function selectAll() {
+    if (isEditModeActive()) return;
     deselectAll(true);
     objects.forEach(obj => {
         if (obj.visible && !obj.userData.locked) {
@@ -2734,6 +4418,118 @@ function selectAll() {
     });
     updateOutliner();
     updateSelectionStatus();
+}
+
+// --- DIRECT CAD / BLENDER EDIT MODE (TAB) ---
+function updateEditModeUI() {
+    const active = isEditModeActive();
+    const leftBtn = document.getElementById('btn-edit-mode-left');
+    const subTools = document.getElementById('edit-subtools');
+
+    if (leftBtn) {
+        leftBtn.classList.toggle('active-tool', active);
+        leftBtn.innerText = active ? "✏️ Exit Edit Mode (Tab)" : "✏️ Direct Edit Mode (Tab)";
+    }
+    if (subTools) subTools.classList.toggle('hidden', !active);
+
+    if (active) {
+        const am = getEditActionMode();
+        ['move', 'extrude', 'inset', 'bevel'].forEach(m => {
+            const b = document.getElementById(`actmode-${m}`);
+            if (b) b.classList.toggle('active', m === am);
+        });
+
+        // Filter selection types to only show what the active action can modify:
+        // Pull / Move works on Vertices, Edges, and Faces;
+        // Extrude and Inset only work on Faces;
+        // Bevel only works on Edges.
+        const btnVert = document.getElementById('submode-vertex');
+        const btnEdge = document.getElementById('submode-edge');
+        const btnFace = document.getElementById('submode-face');
+        if (btnVert) btnVert.style.display = (am === 'move') ? '' : 'none';
+        if (btnEdge) btnEdge.style.display = (am === 'move' || am === 'bevel') ? '' : 'none';
+        if (btnFace) btnFace.style.display = (am === 'move' || am === 'extrude' || am === 'inset') ? '' : 'none';
+
+        const sm = getEditSubMode();
+        ['vertex', 'edge', 'face'].forEach(m => {
+            const b = document.getElementById(`submode-${m}`);
+            if (b) b.classList.toggle('active', m === sm);
+        });
+    }
+}
+
+function toggleEditMode(forceState) {
+    const shouldEnter = forceState !== undefined ? forceState : !isEditModeActive();
+    if (shouldEnter) {
+        if (selection.length === 0) return alert("Select a mesh object first to enter Edit Mode (Tab)!");
+        const target = selection[selection.length - 1];
+        if (!target.isMesh) return alert("Edit Mode requires a mesh object (ungroup any group first).");
+        if (target.userData.locked) return alert("Unlock this object before entering Edit Mode.");
+
+        // Keep only the active mesh selected
+        if (selection.length > 1) {
+            selectObject(target, false);
+        }
+        // Hide BoxHelper and EdgeOverlay outline in Edit Mode so feature edges & corner dots are crystal clear
+        selectionHelpers.forEach(h => {
+            h.helper.visible = false;
+            if (h.edgeOverlay) h.edgeOverlay.visible = false;
+        });
+
+        enterEditMode(target, transform, scene);
+        setToolMode('translate');
+        switchEditActionMode('move');
+        switchEditSubMode('face');
+        updateEditModeUI();
+        updateInspectorUI(target);
+        document.getElementById('status-text').innerText = "Edit Mode: Choose an Action and click a Face (3), Edge (2), or Vertex (1)";
+    } else {
+        if (!isEditModeActive()) return;
+        exitEditMode(transform);
+        transform.setSpace(currentSpace);
+        selectionHelpers.forEach(h => {
+            h.helper.visible = true;
+            if (h.edgeOverlay) h.edgeOverlay.visible = true;
+        });
+        refreshSelectionHelpers();
+        refreshTransformAttachment();
+        updateEditModeUI();
+        updateSelectionStatus();
+    }
+}
+
+function switchEditSubMode(mode) {
+    if (!isEditModeActive()) toggleEditMode(true);
+    if (!isEditModeActive()) return;
+    const am = getEditActionMode();
+    if ((am === 'extrude' || am === 'inset') && mode !== 'face') return;
+    if (am === 'bevel' && mode !== 'edge') return;
+    setEditSubMode(mode, transform);
+    updateEditModeUI();
+    const label = mode === 'vertex' ? 'Corner Vertices (1)' : mode === 'edge' ? 'Feature Edges (2)' : 'Polygon Faces (3)';
+    document.getElementById('status-text').innerText = `Edit Mode — Selecting ${label}`;
+}
+
+function switchEditActionMode(mode) {
+    if (!isEditModeActive()) toggleEditMode(true);
+    if (!isEditModeActive()) return;
+    setEditActionMode(mode);
+    if ((mode === 'extrude' || mode === 'inset') && getEditSubMode() !== 'face') {
+        setEditSubMode('face', transform);
+    } else if (mode === 'bevel' && getEditSubMode() !== 'edge') {
+        setEditSubMode('edge', transform);
+    }
+    setToolMode('translate');
+    updateEditModeUI();
+    if (mode === 'extrude') {
+        document.getElementById('status-text').innerText = "Extrude Mode (E): Select a Face & drag the Gizmo in any direction to pull out a new extrusion!";
+    } else if (mode === 'inset') {
+        document.getElementById('status-text').innerText = "Inset Mode (I): Select a Face & drag the Gizmo to step an inner face inward!";
+    } else if (mode === 'bevel') {
+        document.getElementById('status-text').innerText = "Bevel Mode (B): Select an Edge & drag the Gizmo to chamfer/bevel the edge!";
+    } else {
+        document.getElementById('status-text').innerText = "Pull / Move Mode: Drag any Face (3), Edge (2), or Vertex (1) in any direction!";
+    }
 }
 
 // --- DEFORM & MODIFY TOOLS ---
@@ -2928,6 +4724,7 @@ function unhideAll() {
 }
 
 function refreshTransformAttachment() {
+    if (isEditModeActive()) return;
     transform.detach();
     if (selection.length > 0 && !rulerActive && !dropSurfaceActive) {
         const last = selection[selection.length - 1];
@@ -2937,49 +4734,65 @@ function refreshTransformAttachment() {
     }
 }
 
-// --- BOOLEAN CUTTER MODE & ORDER HELPER ---
+// --- BOOLEAN X-RAY MODE, HOVER PREVIEW & ORDER HELPER ---
+function getBooleanToolHex() {
+    if (booleanHoverOp === 'union') return 0x2ecc71;     // Green (Add / Combine)
+    if (booleanHoverOp === 'subtract') return 0xff4757;  // Red (Cut / Subtract)
+    if (booleanHoverOp === 'intersect') return 0xa55eea; // Purple (Shared Overlap)
+    return 0xff9f1a;                                     // Neutral Amber X-Ray Tool
+}
+
 function getBooleanPair() {
     if (selection.length < 2) return null;
-    let meshA = selection[0];
-    let meshB = selection[1];
-    // If meshA is marked as a Hole Cutter and meshB is not, automatically use meshB as Base and meshA as Cutter!
-    if (meshA.userData.isCutter && !meshB.userData.isCutter) {
-        meshA = selection[1];
-        meshB = selection[0];
+    // Choose the first non-X-Ray object as Base (or selection[0] if all/none have isCutter)
+    let baseIdx = 0;
+    if (selection[0].userData.isCutter) {
+        const solidIdx = selection.findIndex(o => !o.userData.isCutter);
+        if (solidIdx !== -1) baseIdx = solidIdx;
     }
-    return { meshA, meshB };
+    const meshA = selection[baseIdx];
+    const toolObjs = selection.filter((_, idx) => idx !== baseIdx);
+    const meshB = toolObjs[toolObjs.length - 1];
+    return { meshA, meshB, toolObjs };
+}
+
+function setBooleanHoverOp(op) {
+    booleanHoverOp = op;
+    if (selection.length >= 2) {
+        selection.forEach(o => updateObjectVisuals(o));
+        refreshSelectionHelpers();
+    }
 }
 
 function toggleCutterMode() {
-    if (selection.length === 0) return alert("Select an object to toggle Hole Cutter preview.");
+    if (selection.length === 0) return alert("Select an object to toggle X-Ray mode.");
     pushToUndo();
-    const targetState = !selection[selection.length - 1].userData.isCutter;
-    selection.forEach(obj => {
-        obj.userData.isCutter = targetState;
-        updateObjectVisuals(obj);
-    });
+    // Only toggle X-Ray on the active (last selected) object so Base and Tool never both turn into X-Ray!
+    const activeObj = selection[selection.length - 1];
+    activeObj.userData.isCutter = !activeObj.userData.isCutter;
+    objects.forEach(o => updateObjectVisuals(o));
     refreshSelectionHelpers();
-    updateInspectorUI(selection[selection.length - 1]);
+    updateInspectorUI(activeObj);
     updateOutliner();
     updateSelectionStatus();
 }
 
 function swapBooleanOrder() {
-    if (selection.length < 2) return alert("Select 2 objects (Shift+Click) to swap Base and Cutter order.");
+    if (selection.length < 2) return alert("Select at least 2 objects (Shift+Click) to swap Base and Tool order.");
+    const lastIdx = selection.length - 1;
     const first = selection[0];
-    selection[0] = selection[1];
-    selection[1] = first;
-    // Also swap cutter flags if one of them was marked as a cutter
-    if (selection[0].userData.isCutter !== selection[1].userData.isCutter) {
+    selection[0] = selection[lastIdx];
+    selection[lastIdx] = first;
+    // Also swap X-Ray flags if only one of them was marked as X-Ray
+    if (selection[0].userData.isCutter !== selection[lastIdx].userData.isCutter) {
         const tmp = selection[0].userData.isCutter;
-        selection[0].userData.isCutter = selection[1].userData.isCutter;
-        selection[1].userData.isCutter = tmp;
-        updateObjectVisuals(selection[0]);
-        updateObjectVisuals(selection[1]);
+        selection[0].userData.isCutter = selection[lastIdx].userData.isCutter;
+        selection[lastIdx].userData.isCutter = tmp;
     }
+    objects.forEach(o => updateObjectVisuals(o));
     refreshSelectionHelpers();
     refreshTransformAttachment();
-    updateInspectorUI(selection[selection.length - 1]);
+    updateInspectorUI(selection[lastIdx]);
     updateOutliner();
     updateSelectionStatus();
 }
@@ -2989,20 +4802,51 @@ function refreshSelectionHelpers() {
         scene.remove(h.helper);
         if (h.helper.geometry) h.helper.geometry.dispose();
         if (h.helper.material) h.helper.material.dispose();
+        if (h.edgeOverlay) {
+            scene.remove(h.edgeOverlay);
+            if (h.edgeOverlay.geometry) h.edgeOverlay.geometry.dispose();
+            if (h.edgeOverlay.material) h.edgeOverlay.material.dispose();
+        }
     });
     selectionHelpers = [];
 
     const pair = getBooleanPair();
+    const toolColor = getBooleanToolHex();
+
     selection.forEach(obj => {
-        let color = 0xffa500; // Default CAD Orange (Base)
-        if (obj.userData.isCutter || (pair && obj === pair.meshB)) {
-            color = 0xff4757; // Cutter Red
-        } else if (pair && obj === pair.meshA) {
-            color = 0x2ecc71; // Base Green when 2+ objects are selected
+        const isBaseInPair = pair && obj === pair.meshA;
+        const isToolInPair = pair && pair.toolObjs.includes(obj);
+
+        let color = 0x00d2d3; // Crisp Cyan for Base / Primary Selection
+        if (isToolInPair || (!isBaseInPair && obj.userData.isCutter)) {
+            color = toolColor;
+        } else if (isBaseInPair) {
+            color = 0x00d2d3; // Solid Base gets Cyan outline
         }
+
         const helper = new THREE.BoxHelper(obj, color);
+        if (isEditModeActive()) helper.visible = false;
         scene.add(helper);
-        selectionHelpers.push({ obj, helper });
+
+        // Add crisp CAD geometry edge outline (and see-through X-Ray wireframe for Tool objects!)
+        let edgeOverlay = null;
+        if (obj.isMesh && obj.geometry && !isEditModeActive()) {
+            const edgesGeo = new THREE.EdgesGeometry(obj.geometry, 15);
+            const isXRayTool = isToolInPair || (!isBaseInPair && obj.userData.isCutter);
+            const edgesMat = new THREE.LineBasicMaterial({
+                color,
+                transparent: true,
+                opacity: isXRayTool ? 0.9 : 0.95,
+                depthTest: !isXRayTool
+            });
+            edgeOverlay = new THREE.LineSegments(edgesGeo, edgesMat);
+            edgeOverlay.renderOrder = isXRayTool ? 890 : 880;
+            obj.updateMatrixWorld(true);
+            obj.matrixWorld.decompose(edgeOverlay.position, edgeOverlay.quaternion, edgeOverlay.scale);
+            scene.add(edgeOverlay);
+        }
+
+        selectionHelpers.push({ obj, helper, edgeOverlay });
     });
 
     const cutterBtn = document.getElementById('cutter-toggle');
@@ -3024,10 +4868,10 @@ function updateSelectionStatus() {
     }
 
     if (selection.length >= 2) {
-        const { meshA, meshB } = getBooleanPair();
+        const { meshA, toolObjs } = getBooleanPair();
         const nameA = meshA.name || "Obj 1";
-        const nameB = meshB.name || "Obj 2";
-        statusEl.innerText = `Base: ${nameA} | Cutter: ${nameB}`;
+        const toolNames = toolObjs.map(o => o.name || "Tool").join(", ");
+        statusEl.innerText = `Base (Cyan): ${nameA} | Tool (X-Ray): ${toolNames}`;
         return;
     }
 
@@ -3046,7 +4890,7 @@ function updateSelectionStatus() {
         if (obj.userData.locked) {
             statusEl.innerText = `🔒 ${obj.name || 'Object'} (Locked)`;
         } else if (obj.userData.isCutter) {
-            statusEl.innerText = `👻 Cutter: ${obj.name || 'Object'} (Shift+Click Base)`;
+            statusEl.innerText = `◪ X-Ray: ${obj.name || 'Object'} (Shift+Click Base)`;
         } else {
             statusEl.innerText = `Selected: ${obj.name || 'Object'}`;
         }
@@ -3318,6 +5162,10 @@ function pushToUndo() {
 
 function undo() {
     if (undoStack.length === 0) return;
+    const wasInEditMode = isEditModeActive();
+    const prevSubMode = getEditSubMode();
+    const prevActMode = getEditActionMode();
+    if (wasInEditMode) toggleEditMode(false);
     const selectedUUIDs = selection.map(o => o.uuid);
     
     redoStack.push(captureState());
@@ -3334,12 +5182,21 @@ function undo() {
     const objectsToReselect = [];
     scene.traverse(o => { if (selectedUUIDs.includes(o.uuid) && (objects.includes(o) || o.parent?.isGroup)) objectsToReselect.push(o); });
     objectsToReselect.forEach(o => selectObject(o, true));
+    if (wasInEditMode && selection.length > 0 && selection[selection.length - 1].isMesh) {
+        toggleEditMode(true);
+        switchEditSubMode(prevSubMode);
+        switchEditActionMode(prevActMode);
+    }
     
     document.getElementById('status-text').innerText = "Undo performed";
 }
 
 function redo() {
     if (redoStack.length === 0) return;
+    const wasInEditMode = isEditModeActive();
+    const prevSubMode = getEditSubMode();
+    const prevActMode = getEditActionMode();
+    if (wasInEditMode) toggleEditMode(false);
     const selectedUUIDs = selection.map(o => o.uuid);
     
     undoStack.push(captureState());
@@ -3356,6 +5213,11 @@ function redo() {
     const objectsToReselect = [];
     scene.traverse(o => { if (selectedUUIDs.includes(o.uuid) && (objects.includes(o) || o.parent?.isGroup)) objectsToReselect.push(o); });
     objectsToReselect.forEach(o => selectObject(o, true));
+    if (wasInEditMode && selection.length > 0 && selection[selection.length - 1].isMesh) {
+        toggleEditMode(true);
+        switchEditSubMode(prevSubMode);
+        switchEditActionMode(prevActMode);
+    }
     
     document.getElementById('status-text').innerText = "Redo performed";
 }
@@ -3371,13 +5233,19 @@ function toggleRandomColors() {
 }
 
 function updateObjectVisuals(obj) {
-    const isCutter = !!obj.userData.isCutter;
+    const pair = getBooleanPair();
+    const isBaseInPair = pair && obj === pair.meshA;
+    const isToolInPair = pair && pair.toolObjs.includes(obj);
+    const isXRay = isToolInPair || (!isBaseInPair && !!obj.userData.isCutter);
+    const toolHex = getBooleanToolHex();
+
     obj.traverse(child => {
         if (child.isMesh) {
-            if (isCutter || child.userData.isCutter) {
-                child.material.color.setHex(0xff3344);
-                child.material.opacity = 0.35;
+            if (isXRay || (!isBaseInPair && child.userData.isCutter)) {
+                child.material.color.setHex(toolHex);
+                child.material.opacity = 0.36;
                 child.material.transparent = true;
+                child.material.depthWrite = false;
                 child.material.wireframe = false;
                 child.material.needsUpdate = true;
                 return;
@@ -3393,6 +5261,7 @@ function updateObjectVisuals(obj) {
             const matType = child.userData.materialType || 'matte';
             child.material.opacity = op;
             child.material.transparent = (op < 1 || matType === 'glass');
+            child.material.depthWrite = !(op < 1 || matType === 'glass');
             child.material.wireframe = isWireframe;
             child.material.needsUpdate = true;
         }
@@ -3673,21 +5542,36 @@ function confirmBevelShape() {
 
 function performBoolean(op) {
     if (selection.length < 2) return alert("Select at least 2 meshes (Shift+Click) for Boolean operations.");
-    const { meshA, meshB } = getBooleanPair();
-    if (!meshA.isMesh || !meshB.isMesh) return alert("Boolean operations require meshes. Please ungroup any selected groups first.");
-    if (meshA.userData.locked || meshB.userData.locked) return alert("Cannot perform Boolean on a locked object.");
+    const { meshA, toolObjs } = getBooleanPair();
+    if (!meshA.isMesh || toolObjs.some(t => !t.isMesh)) {
+        return alert("Boolean operations require meshes. Please ungroup any selected groups first.");
+    }
+    if (meshA.userData.locked || toolObjs.some(t => t.userData.locked)) {
+        return alert("Cannot perform Boolean on a locked object.");
+    }
+    const keepTool = !!document.getElementById('bool-keep-tool')?.checked;
+    booleanHoverOp = null;
     pushToUndo();
     try {
-        const mesh = executeBoolean(meshA, meshB, op, isWireframe);
+        const mesh = executeBoolean(meshA, toolObjs, op, isWireframe);
         mesh.userData.randomColor = generateRandomColor();
         mesh.userData.isCutter = false;
         updateObjectVisuals(mesh);
         deselectAll(true);
         if (meshA.parent) meshA.parent.remove(meshA);
-        if (meshB.parent) meshB.parent.remove(meshB);
         disposeHierarchy(meshA);
-        disposeHierarchy(meshB);
-        objects = objects.filter(o => o !== meshA && o !== meshB);
+        objects = objects.filter(o => o !== meshA);
+
+        if (!keepTool) {
+            toolObjs.forEach(t => {
+                if (t.parent) t.parent.remove(t);
+                disposeHierarchy(t);
+            });
+            objects = objects.filter(o => !toolObjs.includes(o));
+        } else {
+            toolObjs.forEach(t => updateObjectVisuals(t));
+        }
+
         scene.add(mesh);
         objects.push(mesh);
         selectObject(mesh, false);
@@ -3703,6 +5587,7 @@ function selectObject(obj, multi) {
     if (!selection.includes(obj)) { 
         selection.push(obj); 
     }
+    objects.forEach(o => updateObjectVisuals(o));
     refreshSelectionHelpers();
     refreshTransformAttachment();
     updateInspectorUI(obj); 
@@ -3712,13 +5597,24 @@ function selectObject(obj, multi) {
 }
 
 function deselectAll(skipUpdate = false) { 
+    if (isEditModeActive()) {
+        exitEditMode(transform);
+        updateEditModeUI();
+    }
+    booleanHoverOp = null;
     selectionHelpers.forEach(h => {
         scene.remove(h.helper);
         if (h.helper.geometry) h.helper.geometry.dispose();
         if (h.helper.material) h.helper.material.dispose();
+        if (h.edgeOverlay) {
+            scene.remove(h.edgeOverlay);
+            if (h.edgeOverlay.geometry) h.edgeOverlay.geometry.dispose();
+            if (h.edgeOverlay.material) h.edgeOverlay.material.dispose();
+        }
     });
     selectionHelpers = [];
     selection = []; 
+    objects.forEach(o => updateObjectVisuals(o));
     transform.detach(); 
     document.getElementById('inspector').classList.add('hidden');
     const cutterBtn = document.getElementById('cutter-toggle');
@@ -3780,8 +5676,30 @@ function onPointerUp(event) {
     // If the mouse moved more than 5 pixels, it was a drag, not a click.
     if (pointerDownPosition.distanceTo(new THREE.Vector2(event.clientX, event.clientY)) > 5) return; 
 
-    if (transform.axis !== null || event.target.closest('.panel') || event.target.tagName === 'SELECT' || event.target.tagName === 'INPUT') return; 
+    if (transform.axis !== null || event.target.closest('.panel') || event.target.closest('#edit-mode-bar') || event.target.tagName === 'SELECT' || event.target.tagName === 'INPUT') return; 
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1; mouse.y = -(event.clientY / window.innerHeight) * 2 + 1; 
+
+    // DIRECT EDIT MODE FEATURE SELECTION (VERTEX / EDGE / FACE)
+    if (isEditModeActive()) {
+        const hit = pickEditFeature(raycaster, mouse, camera);
+        const sel = selectEditFeature(hit, transform);
+        if (sel) {
+            const act = getEditActionMode();
+            const typeName = sel.type.charAt(0).toUpperCase() + sel.type.slice(1);
+            if (sel.type === 'face' && act === 'extrude') {
+                document.getElementById('status-text').innerText = `Face Selected — Drag Gizmo in any direction to Extrude!`;
+            } else if (sel.type === 'face' && act === 'inset') {
+                document.getElementById('status-text').innerText = `Face Selected — Drag Gizmo to Inset face inward!`;
+            } else if (sel.type === 'edge' && act === 'bevel') {
+                document.getElementById('status-text').innerText = `Edge Selected — Drag Gizmo to Bevel / Chamfer edge!`;
+            } else {
+                document.getElementById('status-text').innerText = `${typeName} Selected — Drag Gizmo to Pull/Move (or press E=Extrude, I=Inset, B=Bevel)`;
+            }
+        } else {
+            document.getElementById('status-text').innerText = `Edit Mode: Click a ${getEditSubMode()} on the model`;
+        }
+        return;
+    }
     
     // RULER LOGIC INTERCEPT
     if (rulerActive) {
@@ -4107,7 +6025,7 @@ function updateOutliner() {
             }
 
             const text = document.createElement('span');
-            const icon = obj.isGroup ? "📁 " : (obj.userData.isCutter ? "👻 " : "🧊 ");
+            const icon = obj.isGroup ? "📁 " : (obj.userData.isCutter ? "◪ " : "🧊 ");
             text.innerText = icon + (obj.name || `Object ${index + 1}`);
             text.style.pointerEvents = "none";
             leftDiv.appendChild(text);
@@ -4404,8 +6322,10 @@ function toggleCamera() {
         orthoCamera.zoom = 1;
         orthoCamera.updateProjectionMatrix();
     } else {
+        const h = (orthoCamera.top - orthoCamera.bottom) / (prevCam.zoom || 1);
+        const fov = perspCamera.fov * (Math.PI / 180);
         const dist = prevCam.position.distanceTo(orbit.target) || 50;
-        const newDist = dist / (prevCam.zoom || 1);
+        const newDist = h > 0 ? (h / 2) / Math.tan(fov / 2) : dist / (prevCam.zoom || 1);
         const dir = prevCam.position.clone().sub(orbit.target).normalize();
         
         camera.position.copy(orbit.target).add(dir.multiplyScalar(newDist));
@@ -4600,15 +6520,16 @@ function openContextMenu(e) {
         addItem('Copy', 'Ctrl+C', () => copySelected());
         if (clipboard.length > 0) addItem('Paste', 'Ctrl+V', () => pasteCopied());
         addDivider();
-        addItem(last.userData.isCutter ? 'Disable Hole Cutter 👻' : 'Make Hole Cutter 👻', '', () => toggleCutterMode());
+        addItem(last.userData.isCutter ? 'Disable X-Ray ◪' : 'Enable X-Ray ◪', '', () => toggleCutterMode());
         if (selection.length >= 2) {
             addItem('Boolean Subtract', '', () => performBoolean('subtract'));
             addItem('Boolean Union', '', () => performBoolean('union'));
-            addItem('Swap Base / Cutter ⇄', '', () => swapBooleanOrder());
+            addItem('Boolean Intersect', '', () => performBoolean('intersect'));
+            addItem('Swap Base / Tool ⇄', '', () => swapBooleanOrder());
         }
         if (last.isMesh) {
             addDivider();
-            addItem('Extrude / Inset Face...', 'E', () => openModifyModal('extrude'));
+            addItem(isEditModeActive() ? 'Exit Edit Mode' : 'Enter Direct Edit Mode ✏️', 'Tab', () => toggleEditMode());
             addItem('Bevel / 45° Chamfer...', 'Ctrl+B', () => openModifyModal('bevel'));
             addItem('Hollow / Shell...', '', () => openModifyModal('hollow'));
             addItem('Plane Cut / Slice...', '', () => openModifyModal('slice'));
@@ -4721,6 +6642,32 @@ function onKeyDown(e) {
     if(['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return; 
     const key = e.key.toLowerCase();
 
+    if (e.key === 'Tab') {
+        e.preventDefault();
+        toggleEditMode();
+        return;
+    }
+
+    // 10-Key Numpad ALWAYS controls viewport camera views (both in Object Mode and Edit Mode)
+    if (e.code && e.code.startsWith('Numpad')) {
+        if (e.code === 'Numpad1') { e.preventDefault(); (e.ctrlKey || e.metaKey) ? setView('back') : setView('front'); return; }
+        if (e.code === 'Numpad3') { e.preventDefault(); (e.ctrlKey || e.metaKey) ? setView('left') : setView('right'); return; }
+        if (e.code === 'Numpad7') { e.preventDefault(); (e.ctrlKey || e.metaKey) ? setView('bottom') : setView('top'); return; }
+        if (e.code === 'Numpad5') { e.preventDefault(); toggleCamera(); return; }
+        if (e.code === 'Numpad0' || e.code === 'NumpadDecimal') { e.preventDefault(); frameSelected(); return; }
+    }
+
+    // Top-row numbers above keyboard (Digit1, Digit2, Digit3) select Vertices, Edges, and Faces in Edit Mode
+    if (isEditModeActive() && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (e.code === 'Digit1') { switchEditSubMode('vertex'); return; }
+        if (e.code === 'Digit2') { switchEditSubMode('edge'); return; }
+        if (e.code === 'Digit3') { switchEditSubMode('face'); return; }
+        if (key === 'e') { switchEditActionMode('extrude'); return; }
+        if (key === 'i') { switchEditActionMode('inset'); return; }
+        if (key === 'b') { switchEditActionMode('bevel'); return; }
+        if (key === 'm' || key === 'g') { switchEditActionMode('move'); setToolMode('translate'); return; }
+    }
+
     // Blender-style Reset Transforms (Alt + G / R / S), Deselect All (Alt + A), and Unhide All (Alt + H)
     if (e.altKey) {
         if (key === 'g') { e.preventDefault(); resetSelectedTransform('pos'); return; }
@@ -4732,11 +6679,13 @@ function onKeyDown(e) {
 
     if (e.ctrlKey || e.metaKey) {
         if (key === 'a') { e.preventDefault(); openApplyMenu(); return; }
-        if (key === 'b') { e.preventDefault(); openModifyModal('bevel'); return; }
+        if (key === 'b') {
+            e.preventDefault();
+            if (isEditModeActive()) switchEditActionMode('bevel');
+            else openModifyModal('bevel');
+            return;
+        }
         if (key === 'g') { e.preventDefault(); groupSelected(); return; }
-        if (key === '1') { e.preventDefault(); setView('back'); return; }
-        if (key === '3') { e.preventDefault(); setView('left'); return; }
-        if (key === '7') { e.preventDefault(); setView('bottom'); return; }
     }
 
     if (!e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -4752,14 +6701,10 @@ function onKeyDown(e) {
         if (key === 'q') handleRulerButton();
         if (key === 't') handleDropButton();
         if (key === 'h') hideSelected();
-        if (key === '0' || key === '.') frameSelected();
+        if (key === '.') frameSelected();
         if (e.key === 'Home') { e.preventDefault(); frameAll(); }
-        if (key === '5') toggleCamera(); 
         if (key === 'u') ungroupSelected(); 
         if (key === 'w') toggleSpace();
-        if (key === '1') setView('front');
-        if (key === '3') setView('right');
-        if (key === '7') setView('top');
     }
     
     if(e.shiftKey && key === 'd') { e.preventDefault(); cloneSelected(); }
@@ -4821,7 +6766,13 @@ function animate() {
         orbit.update(); 
     }
     
-    selectionHelpers.forEach(h => h.helper.update()); 
+    selectionHelpers.forEach(h => {
+        h.helper.update();
+        if (h.edgeOverlay && h.obj) {
+            h.obj.updateMatrixWorld(true);
+            h.obj.matrixWorld.decompose(h.edgeOverlay.position, h.edgeOverlay.quaternion, h.edgeOverlay.scale);
+        }
+    }); 
     
     renderer.clear();
     renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);

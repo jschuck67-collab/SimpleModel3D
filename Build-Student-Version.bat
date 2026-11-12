@@ -25,6 +25,7 @@ $moduleOrder = @(
     "js/shapes.js",
     "js/booleanOps.js",
     "js/modifiers.js",
+    "js/editMode.js",
     "js/tools.js",
     "js/io.js",
     "js/main.js"

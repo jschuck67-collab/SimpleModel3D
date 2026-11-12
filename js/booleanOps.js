@@ -1,12 +1,17 @@
 import * as THREE from 'three';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Brush, Evaluator, SUBTRACTION, ADDITION, INTERSECTION } from 'three-bvh-csg';
 
 const csgEvaluator = new Evaluator();
 csgEvaluator.attributes = ['position', 'normal'];
+csgEvaluator.useGroups = false;
 
 function createPreparedBrush(mesh) {
     mesh.updateMatrixWorld(true);
     let geo = mesh.geometry.clone();
+    if (!geo.index) {
+        geo = mergeVertices(geo);
+    }
     if (!geo.attributes.normal) {
         geo.computeVertexNormals();
     }
@@ -40,12 +45,24 @@ function createPreparedBrush(mesh) {
     return brush;
 }
 
-export function executeBoolean(meshA, meshB, op, isWireframe) {
-    const brushA = createPreparedBrush(meshA);
-    const brushB = createPreparedBrush(meshB);
-    
-    const res = csgEvaluator.evaluate(brushA, brushB, op === 'subtract' ? SUBTRACTION : op === 'union' ? ADDITION : INTERSECTION);
-    
+export function executeBoolean(meshA, meshBOrList, op, isWireframe) {
+    const toolList = Array.isArray(meshBOrList) ? meshBOrList : [meshBOrList];
+    const opConst = op === 'subtract' ? SUBTRACTION : op === 'union' ? ADDITION : INTERSECTION;
+
+    let currentBrush = createPreparedBrush(meshA);
+    for (const toolMesh of toolList) {
+        if (!toolMesh || !toolMesh.isMesh) continue;
+        const brushB = createPreparedBrush(toolMesh);
+        const nextBrush = csgEvaluator.evaluate(currentBrush, brushB, opConst);
+        currentBrush.geometry.dispose();
+        brushB.geometry.dispose();
+        currentBrush = nextBrush;
+    }
+
+    const res = currentBrush;
+    res.geometry.clearGroups();
+    res.geometry.computeVertexNormals();
+
     // Center the resulting geometry so its pivot is at its bounding box center
     res.geometry.computeBoundingBox();
     const center = new THREE.Vector3();
@@ -77,10 +94,9 @@ export function executeBoolean(meshA, meshB, op, isWireframe) {
     mesh.userData.trueColor = trueColor;
     mesh.userData.opacity = opacity;
     mesh.userData.materialType = matType;
+    mesh.userData.triGroupIds = null; // Fresh topology for Direct Edit Mode (Tab)
     mesh.position.copy(center);
     mesh.name = op.charAt(0).toUpperCase() + op.slice(1) + " Result";
-    
-    brushA.geometry.dispose();
-    brushB.geometry.dispose();
+
     return mesh;
 }

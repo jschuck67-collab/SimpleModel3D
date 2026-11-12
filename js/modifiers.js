@@ -519,7 +519,7 @@ export function applyEdgeBevel(mesh, bevelWidth = 1.5, style = 'fillet', shapeMo
         // Box / Rectangular Prism at exact physical W, D, H dimensions
         newGeo = new RoundedBoxGeometry(w, d, h, segs, actualBevel);
         if (segs === 1) {
-            newGeo = newGeo.toNonIndexed();
+            if (newGeo.index) newGeo = newGeo.toNonIndexed();
             newGeo.computeVertexNormals();
         }
     }

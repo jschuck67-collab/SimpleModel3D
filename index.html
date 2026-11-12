@@ -92,20 +92,25 @@
                 <div class="accordion-content">
                     <div class="status-msg" id="status-text">Select objects...</div>
                     <div class="grid-2" style="margin-bottom: 5px;">
-                        <button id="cutter-toggle" class="btn-cutter btn-small" onclick="toggleCutterMode()" title="Ghost red preview for hole cutters">👻 Hole Cutter</button>
-                        <button class="btn-small" onclick="swapBooleanOrder()" title="Swap which selected object is Base vs Cutter">⇄ Swap Order</button>
+                        <button id="cutter-toggle" class="btn-cutter btn-small" onclick="toggleCutterMode()" title="Toggle see-through X-Ray mode on active object">◪ X-Ray</button>
+                        <button class="btn-small" onclick="swapBooleanOrder()" title="Swap which selected object is Solid Base vs X-Ray Tool">⇄ Swap Order</button>
                     </div>
-                    <div class="grid-3">
-                        <button class="btn-bool btn-small" onclick="performBoolean('union')">Union</button>
-                        <button class="btn-bool btn-small" onclick="performBoolean('subtract')">Sub</button>
-                        <button class="btn-bool btn-small" onclick="performBoolean('intersect')">Inter</button>
+                    <div class="grid-3" style="margin-bottom: 6px;">
+                        <button class="btn-bool btn-bool-union btn-small" onclick="performBoolean('union')" onmouseenter="setBooleanHoverOp('union')" onmouseleave="setBooleanHoverOp(null)" title="Combine Base and Tool objects into one solid">Union</button>
+                        <button class="btn-bool btn-bool-sub btn-small" onclick="performBoolean('subtract')" onmouseenter="setBooleanHoverOp('subtract')" onmouseleave="setBooleanHoverOp(null)" title="Cut Tool object(s) out of the solid Cyan Base object">Sub</button>
+                        <button class="btn-bool btn-bool-inter btn-small" onclick="performBoolean('intersect')" onmouseenter="setBooleanHoverOp('intersect')" onmouseleave="setBooleanHoverOp(null)" title="Keep only the overlapping volume shared by Base and Tool">Inter</button>
+                    </div>
+                    <div class="check-row" style="margin-bottom: 4px;" onclick="document.getElementById('bool-keep-tool').click(); event.stopPropagation();" title="Keep the Tool object(s) in the scene after the Boolean (great for interlocking parts)">
+                        <input type="checkbox" id="bool-keep-tool" onclick="event.stopPropagation();">
+                        <span>Keep Tool Object</span>
                     </div>
                 </div>
 
                 <h4 class="accordion-header" onclick="this.classList.toggle('collapsed-parent'); this.nextElementSibling.classList.toggle('collapsed');"><span>Deform & Modify</span> <span class="chevron">▼</span></h4>
                 <div class="accordion-content">
+                    <button id="btn-edit-mode-left" class="btn-small" style="background:#e67e22; margin-bottom: 6px;" onclick="toggleEditMode()" title="Direct Vertex / Edge / Face Edit Mode (Tab)">✏️ Direct Edit Mode (Tab)</button>
                     <div class="grid-2" style="margin-bottom: 5px;">
-                        <button id="tool-extrude" class="btn-small" style="background:#8e44ad;" onclick="openModifyModal('extrude')" title="Extrude or Inset a Face (E)">Extrude / Inset (E)</button>
+                        <button id="tool-extrude" class="btn-small" style="background:#8e44ad;" onclick="openModifyModal('extrude')" title="Modal Extrude or Inset a Face">Modal Extrude</button>
                         <button class="btn-small" style="background:#8e44ad;" onclick="openModifyModal('bevel')" title="Round Fillet or 45° Chamfer Edges (Ctrl+B)">Bevel / Chamfer</button>
                     </div>
                     <div class="grid-2" style="margin-bottom: 5px;">
@@ -202,10 +207,11 @@
                     </div>
                     <div class="grid-2">
                         <button id="theme-toggle" onclick="toggleTheme()" class="btn-small">Theme: DARK</button>
-                        <button onclick="toggleCamera()" title="Toggle Camera (5)">Persp / Ortho</button>
+                        <button onclick="toggleCamera()" class="btn-small" title="Toggle Camera (5)">Persp / Ortho</button>
                     </div>
+                    <button id="light-mode-toggle" class="btn-small active" onclick="toggleLightingMode()" title="Switch between 360° CAD World Light (all sides lit) and Directional Sun Light">Lighting: CAD World</button>
                     <div class="input-group">
-                        <div class="label-row" style="margin-top:5px;">LIGHT INTENSITY (<span id="light-val">100</span>%)</div>
+                        <div class="label-row" style="margin-top:5px;">WORLD LIGHT (<span id="light-val">100</span>%)</div>
                         <input type="range" id="light-intensity" min="0" max="2" step="0.1" value="1" oninput="updateLighting(this.value)">
                     </div>
                     <div class="inline-row">
@@ -337,6 +343,21 @@
     </div>
 
     <div id="ruler-label"></div>
+    <div id="edit-drag-badge"></div>
+
+    <!-- TOP-CENTER BLENDER / CAD EDIT MODE HUD BAR -->
+    <div id="edit-mode-bar" onpointerdown="event.stopPropagation()">
+        <div id="edit-subtools" class="mode-pill-group hidden">
+            <button id="actmode-move" class="mode-pill-btn active" onclick="switchEditActionMode('move')" title="Pull / Move selected Vertex, Edge, or Face in any direction">↔ Pull / Move</button>
+            <button id="actmode-extrude" class="mode-pill-btn" onclick="switchEditActionMode('extrude')" title="Extrude New Segment when dragging Gizmo on a Face (E)">⏫ Extrude (E)</button>
+            <button id="actmode-inset" class="mode-pill-btn" onclick="switchEditActionMode('inset')" title="Inset Face inward when dragging Gizmo (I)">▣ Inset (I)</button>
+            <button id="actmode-bevel" class="mode-pill-btn" onclick="switchEditActionMode('bevel')" title="Bevel / Chamfer selected Edge when dragging Gizmo (B)">◩ Bevel (B)</button>
+            <span class="mode-sep">|</span>
+            <button id="submode-vertex" class="mode-pill-btn" onclick="switchEditSubMode('vertex')" title="Select Corner Vertices (1)">• Vertex (1)</button>
+            <button id="submode-edge" class="mode-pill-btn" onclick="switchEditSubMode('edge')" title="Select Feature Edges (2)">╱ Edge (2)</button>
+            <button id="submode-face" class="mode-pill-btn active" onclick="switchEditSubMode('face')" title="Select Polygon Faces (3)">▢ Face (3)</button>
+        </div>
+    </div>
 
     <div id="dim-x" class="dim-label"></div>
     <div id="dim-y" class="dim-label"></div>
@@ -360,10 +381,12 @@
                     <tr><td>Right-Click</td><td>Object / Scene Context Menu</td></tr>
                     <tr><td>Alt + Left Drag</td><td>Orbit (Trackpad / 3-Btn Emulation)</td></tr>
                     <tr><td>Left-Click + Drag</td><td>Box / Marquee Selection (+Shift Add)</td></tr>
+                    <tr><td>Tab</td><td>Toggle Object Mode / Edit Mode</td></tr>
+                    <tr><td>1 / 2 / 3 (in Edit Mode)</td><td>Select Vertex / Edge / Face</td></tr>
+                    <tr><td>E / I (in Edit Mode)</td><td>Extrude Drag / Inset Drag on Face</td></tr>
                     <tr><td>M (or G in Blender)</td><td>Move / Grab Tool</td></tr>
                     <tr><td>R</td><td>Rotate Tool</td></tr>
                     <tr><td>S</td><td>Scale Tool</td></tr>
-                    <tr><td>E</td><td>Face Extrude / Inset Tool</td></tr>
                     <tr><td>Ctrl + B</td><td>Edge Bevel / 45° Chamfer Tool</td></tr>
                     <tr><td>Ctrl + A</td><td>Apply Transform Menu (Loc / Rot / Scale)</td></tr>
                     <tr><td>Alt + G / R / S</td><td>Reset Position / Rotation / Scale</td></tr>
@@ -724,11 +747,9 @@
     </script>
     <script type="module" src="js/main.js"></script>
     <script>
-        if ('serviceWorker' in navigator) {
+        if ('serviceWorker' in navigator && location.protocol === 'https:') {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').catch((err) => {
-                    console.warn('ServiceWorker registration skipped:', err);
-                });
+                navigator.serviceWorker.register('./sw.js').catch(() => {});
             });
         }
     </script>

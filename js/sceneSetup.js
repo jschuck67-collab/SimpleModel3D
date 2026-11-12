@@ -19,13 +19,42 @@ export function initScene() {
     scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
     document.body.appendChild(renderer.domElement);
     
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.45);
     ambientLight.name = 'AmbientLight';
     scene.add(ambientLight);
-    const sun = new THREE.DirectionalLight(0xffffff, 1);
+
+    // Z-up Hemisphere light for natural top-to-bottom world gradient
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xb0b8c5, 0.55);
+    hemiLight.position.set(0, 0, 1);
+    hemiLight.name = 'WorldHemiLight';
+    scene.add(hemiLight);
+
+    // 360-degree CAD World Fill Lights (distinct brightness on all 6 axes so no face is ever in dark shadow)
+    const worldFillGroup = new THREE.Group();
+    worldFillGroup.name = 'WorldFillGroup';
+
+    const fill1 = new THREE.DirectionalLight(0xffffff, 0.65);
+    fill1.position.set(-50, -120, 140);
+    worldFillGroup.add(fill1);
+
+    const fill2 = new THREE.DirectionalLight(0xffffff, 0.50);
+    fill2.position.set(130, 90, -70);
+    worldFillGroup.add(fill2);
+
+    const fill3 = new THREE.DirectionalLight(0xffffff, 0.35);
+    fill3.position.set(-120, 100, 50);
+    worldFillGroup.add(fill3);
+
+    scene.add(worldFillGroup);
+
+    // Single Directional Sun (used when toggled to Sun Shadow mode)
+    const sun = new THREE.DirectionalLight(0xffffff, 0);
     sun.position.set(100, -100, 200);
     sun.name = 'SunLight';
     scene.add(sun);
+
+    scene.userData.lightingMode = 'world'; // 'world' (360° CAD World) | 'sun' (Directional Sun)
+    scene.userData.lightIntensity = 1.0;
 
     const grid = new THREE.GridHelper(256, 256, 0x444444, 0x383838);
     grid.rotation.x = Math.PI / 2;
@@ -55,6 +84,7 @@ export function initScene() {
 
     const orbit = new OrbitControls(camera, renderer.domElement);
     orbit.enableDamping = false;
+    orbit.zoomSpeed = 1.6;
     // Blender Viewport Navigation: Middle Mouse = Rotate (Shift+MMB = Pan, Scroll = Zoom), Right Click = Context Menu
     orbit.mouseButtons = {
         LEFT: null,
