@@ -209,7 +209,6 @@
                         <button id="theme-toggle" onclick="toggleTheme()" class="btn-small">Theme: DARK</button>
                         <button onclick="toggleCamera()" class="btn-small" title="Toggle Camera (5)">Persp / Ortho</button>
                     </div>
-                    <button id="light-mode-toggle" class="btn-small active" onclick="toggleLightingMode()" title="Switch between 360° CAD World Light (all sides lit) and Directional Sun Light">Lighting: CAD World</button>
                     <div class="input-group">
                         <div class="label-row" style="margin-top:5px;">WORLD LIGHT (<span id="light-val">100</span>%)</div>
                         <input type="range" id="light-intensity" min="0" max="2" step="0.1" value="1" oninput="updateLighting(this.value)">

@@ -1,7 +1,40 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+/**
+ * Generates an ultra-smooth, uniform 360-degree diffuse studio gradient texture.
+ * Completely eliminates pinpoint specular hot-spots / flashlight glares while giving
+ * Glass and Metal rich, bright PBR reflections and refractions from all viewing angles.
+ */
+function createStudioDiffuseEnvironment(renderer) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+
+    // Smooth top-to-bottom soft daylight gradient
+    const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    grad.addColorStop(0.0, '#ffffff'); // Zenith
+    grad.addColorStop(0.35, '#eef2f7');
+    grad.addColorStop(0.5, '#dfe5ed'); // Horizon
+    grad.addColorStop(0.7, '#c8d0da');
+    grad.addColorStop(1.0, '#a6b0be'); // Ground
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.mapping = THREE.EquirectangularReflectionMapping;
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.needsUpdate = true;
+
+    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    pmremGenerator.compileEquirectangularShader();
+    const envRenderTarget = pmremGenerator.fromEquirectangular(texture);
+    texture.dispose();
+    pmremGenerator.dispose();
+    return envRenderTarget.texture;
+}
 
 export function initScene() {
     const scene = new THREE.Scene();
@@ -14,47 +47,33 @@ export function initScene() {
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
     
-    // Balanced studio environment for realistic PBR metal reflections and glass refraction
-    const pmremGenerator = new THREE.PMREMGenerator(renderer);
-    scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+    // Assign uniform studio environment map
+    scene.environment = createStudioDiffuseEnvironment(renderer);
     document.body.appendChild(renderer.domElement);
     
-    // Clean, high-intensity ambient & hemisphere light so shadows are never dark
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
+    // Clean, perfectly balanced 360-degree CAD World Lights
+    // 1. Omnidirectional ambient baseline
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.70);
     ambientLight.name = 'AmbientLight';
     scene.add(ambientLight);
 
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xb0b8c5, 0.75);
+    // 2. Hemisphere light for clean Z-up top vs bottom plane differentiation
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x8a929e, 0.60);
     hemiLight.position.set(0, 0, 1);
     hemiLight.name = 'WorldHemiLight';
     scene.add(hemiLight);
 
-    // Subtle 360-degree fill group for crisp CAD face contrast (no harsh single hotspot)
-    const worldFillGroup = new THREE.Group();
-    worldFillGroup.name = 'WorldFillGroup';
+    // 3. Balanced camera headlamp: follows user's camera viewpoint so whatever face
+    // you look at is always cleanly and pleasantly illuminated without harsh hotspots.
+    const headlamp = new THREE.DirectionalLight(0xffffff, 0.50);
+    headlamp.name = 'CameraHeadlamp';
+    headlamp.position.set(0, 0, 1);
+    camera.add(headlamp);
+    scene.add(camera);
 
-    const fill1 = new THREE.DirectionalLight(0xffffff, 0.45);
-    fill1.position.set(100, -120, 150);
-    worldFillGroup.add(fill1);
-
-    const fill2 = new THREE.DirectionalLight(0xffffff, 0.35);
-    fill2.position.set(-100, 120, 100);
-    worldFillGroup.add(fill2);
-
-    const fill3 = new THREE.DirectionalLight(0xffffff, 0.25);
-    fill3.position.set(120, 100, -80);
-    worldFillGroup.add(fill3);
-
-    scene.add(worldFillGroup);
-
-    // Single Directional Sun (used when toggled to Sun Shadow mode)
-    const sun = new THREE.DirectionalLight(0xffffff, 0);
-    sun.position.set(100, -100, 200);
-    sun.name = 'SunLight';
-    scene.add(sun);
-
-    scene.userData.lightingMode = 'world'; // 'world' (360° CAD World) | 'sun' (Directional Sun)
     scene.userData.lightIntensity = 1.0;
 
     const grid = new THREE.GridHelper(256, 256, 0x444444, 0x383838);
