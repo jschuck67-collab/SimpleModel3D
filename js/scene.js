@@ -26,11 +26,11 @@ export function forceMaterialUpgrade(obj) {
 
             child.material = new THREE.MeshPhysicalMaterial({
                 color: trueColor,
-                roughness: matType === 'metal' ? 0.2 : matType === 'glass' ? 0.05 : (oldMat.roughness !== undefined ? oldMat.roughness : 0.4),
-                metalness: matType === 'metal' ? 0.8 : matType === 'glass' ? 0.1 : (oldMat.metalness !== undefined ? oldMat.metalness : 0.2),
-                transmission: matType === 'glass' ? 0.9 : (oldMat.transmission || 0),
-                ior: oldMat.ior || 1.5,
-                thickness: matType === 'glass' ? 2.0 : (oldMat.thickness || 0),
+                roughness: matType === 'metal' ? 0.35 : matType === 'glass' ? 0.15 : (oldMat.roughness !== undefined ? oldMat.roughness : 0.55),
+                metalness: matType === 'metal' ? 0.70 : matType === 'glass' ? 0.05 : (oldMat.metalness !== undefined ? oldMat.metalness : 0.05),
+                transmission: matType === 'glass' ? 0.85 : (oldMat.transmission || 0),
+                ior: oldMat.ior || 1.45,
+                thickness: matType === 'glass' ? 1.2 : (oldMat.thickness || 0),
                 wireframe: oldMat.wireframe || false,
                 side: THREE.DoubleSide,
                 transparent: op < 1 || matType === 'glass' || oldMat.transparent || false,

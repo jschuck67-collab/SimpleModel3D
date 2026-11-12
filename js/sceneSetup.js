@@ -14,35 +14,35 @@ export function initScene() {
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
     
-    const pmremGenerator = new THREE.PMREMGenerator(renderer);
-    scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
     document.body.appendChild(renderer.domElement);
     
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.45);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     ambientLight.name = 'AmbientLight';
     scene.add(ambientLight);
 
-    // Z-up Hemisphere light for natural top-to-bottom world gradient
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xb0b8c5, 0.55);
+    // Z-up Hemisphere light for clean, diffuse top/bottom shading without specular hot-spots
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x8892a0, 0.65);
     hemiLight.position.set(0, 0, 1);
     hemiLight.name = 'WorldHemiLight';
     scene.add(hemiLight);
 
-    // 360-degree CAD World Fill Lights (distinct brightness on all 6 axes so no face is ever in dark shadow)
+    // 360-degree CAD World Key & Fill Lights (wide subtle directional illumination for clean face contrast)
     const worldFillGroup = new THREE.Group();
     worldFillGroup.name = 'WorldFillGroup';
 
-    const fill1 = new THREE.DirectionalLight(0xffffff, 0.65);
-    fill1.position.set(-50, -120, 140);
+    const fill1 = new THREE.DirectionalLight(0xffffff, 0.55);
+    fill1.position.set(100, -120, 150);
     worldFillGroup.add(fill1);
 
-    const fill2 = new THREE.DirectionalLight(0xffffff, 0.50);
-    fill2.position.set(130, 90, -70);
+    const fill2 = new THREE.DirectionalLight(0xffffff, 0.40);
+    fill2.position.set(-100, 120, 100);
     worldFillGroup.add(fill2);
 
-    const fill3 = new THREE.DirectionalLight(0xffffff, 0.35);
-    fill3.position.set(-120, 100, 50);
+    const fill3 = new THREE.DirectionalLight(0xffffff, 0.30);
+    fill3.position.set(120, 100, -80);
     worldFillGroup.add(fill3);
 
     scene.add(worldFillGroup);

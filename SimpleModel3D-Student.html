@@ -1356,20 +1356,20 @@ function updateLighting(val, scene) {
     const sun = scene.getObjectByName('SunLight');
 
     if (mode === 'world') {
-        if (ambient) ambient.intensity = 0.45 * intensity;
-        if (hemi) hemi.intensity = 0.55 * intensity;
+        if (ambient) ambient.intensity = 0.70 * intensity;
+        if (hemi) hemi.intensity = 0.65 * intensity;
         if (fillGroup) {
             fillGroup.visible = true;
-            if (fillGroup.children[0]) fillGroup.children[0].intensity = 0.65 * intensity;
-            if (fillGroup.children[1]) fillGroup.children[1].intensity = 0.50 * intensity;
-            if (fillGroup.children[2]) fillGroup.children[2].intensity = 0.35 * intensity;
+            if (fillGroup.children[0]) fillGroup.children[0].intensity = 0.55 * intensity;
+            if (fillGroup.children[1]) fillGroup.children[1].intensity = 0.40 * intensity;
+            if (fillGroup.children[2]) fillGroup.children[2].intensity = 0.30 * intensity;
         }
         if (sun) sun.intensity = 0;
     } else {
-        if (ambient) ambient.intensity = 0.55 * intensity;
-        if (hemi) hemi.intensity = 0;
+        if (ambient) ambient.intensity = 0.60 * intensity;
+        if (hemi) hemi.intensity = 0.30 * intensity;
         if (fillGroup) fillGroup.visible = false;
-        if (sun) sun.intensity = 1.15 * intensity;
+        if (sun) sun.intensity = 1.10 * intensity;
     }
 
     if ('environmentIntensity' in scene) {
@@ -1421,11 +1421,11 @@ function forceMaterialUpgrade(obj) {
 
             child.material = new THREE.MeshPhysicalMaterial({
                 color: trueColor,
-                roughness: matType === 'metal' ? 0.2 : matType === 'glass' ? 0.05 : (oldMat.roughness !== undefined ? oldMat.roughness : 0.4),
-                metalness: matType === 'metal' ? 0.8 : matType === 'glass' ? 0.1 : (oldMat.metalness !== undefined ? oldMat.metalness : 0.2),
-                transmission: matType === 'glass' ? 0.9 : (oldMat.transmission || 0),
-                ior: oldMat.ior || 1.5,
-                thickness: matType === 'glass' ? 2.0 : (oldMat.thickness || 0),
+                roughness: matType === 'metal' ? 0.35 : matType === 'glass' ? 0.15 : (oldMat.roughness !== undefined ? oldMat.roughness : 0.55),
+                metalness: matType === 'metal' ? 0.70 : matType === 'glass' ? 0.05 : (oldMat.metalness !== undefined ? oldMat.metalness : 0.05),
+                transmission: matType === 'glass' ? 0.85 : (oldMat.transmission || 0),
+                ior: oldMat.ior || 1.45,
+                thickness: matType === 'glass' ? 1.2 : (oldMat.thickness || 0),
                 wireframe: oldMat.wireframe || false,
                 side: THREE.DoubleSide,
                 transparent: op < 1 || matType === 'glass' || oldMat.transparent || false,
@@ -1467,35 +1467,35 @@ function initScene() {
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
     
-    const pmremGenerator = new THREE.PMREMGenerator(renderer);
-    scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
     document.body.appendChild(renderer.domElement);
     
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.45);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     ambientLight.name = 'AmbientLight';
     scene.add(ambientLight);
 
-    // Z-up Hemisphere light for natural top-to-bottom world gradient
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xb0b8c5, 0.55);
+    // Z-up Hemisphere light for clean, diffuse top/bottom shading without specular hot-spots
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x8892a0, 0.65);
     hemiLight.position.set(0, 0, 1);
     hemiLight.name = 'WorldHemiLight';
     scene.add(hemiLight);
 
-    // 360-degree CAD World Fill Lights (distinct brightness on all 6 axes so no face is ever in dark shadow)
+    // 360-degree CAD World Key & Fill Lights (wide subtle directional illumination for clean face contrast)
     const worldFillGroup = new THREE.Group();
     worldFillGroup.name = 'WorldFillGroup';
 
-    const fill1 = new THREE.DirectionalLight(0xffffff, 0.65);
-    fill1.position.set(-50, -120, 140);
+    const fill1 = new THREE.DirectionalLight(0xffffff, 0.55);
+    fill1.position.set(100, -120, 150);
     worldFillGroup.add(fill1);
 
-    const fill2 = new THREE.DirectionalLight(0xffffff, 0.50);
-    fill2.position.set(130, 90, -70);
+    const fill2 = new THREE.DirectionalLight(0xffffff, 0.40);
+    fill2.position.set(-100, 120, 100);
     worldFillGroup.add(fill2);
 
-    const fill3 = new THREE.DirectionalLight(0xffffff, 0.35);
-    fill3.position.set(-120, 100, 50);
+    const fill3 = new THREE.DirectionalLight(0xffffff, 0.30);
+    fill3.position.set(120, 100, -80);
     worldFillGroup.add(fill3);
 
     scene.add(worldFillGroup);
@@ -1790,11 +1790,11 @@ function executeBoolean(meshA, meshBOrList, op, isWireframe) {
 
     const mat = new THREE.MeshPhysicalMaterial({
         color: trueColor,
-        roughness: matType === 'metal' ? 0.2 : matType === 'glass' ? 0.05 : 0.4,
-        metalness: matType === 'metal' ? 0.8 : matType === 'glass' ? 0.1 : 0.2,
-        transmission: matType === 'glass' ? 0.9 : 0,
-        ior: 1.5,
-        thickness: matType === 'glass' ? 2.0 : 0,
+        roughness: matType === 'metal' ? 0.35 : matType === 'glass' ? 0.15 : 0.55,
+        metalness: matType === 'metal' ? 0.70 : matType === 'glass' ? 0.05 : 0.05,
+        transmission: matType === 'glass' ? 0.85 : 0,
+        ior: 1.45,
+        thickness: matType === 'glass' ? 1.2 : 0,
         transparent: opacity < 1 || matType === 'glass',
         opacity: opacity,
         wireframe: isWireframe,
@@ -5095,7 +5095,7 @@ function frameAll() {
 // --- NEW SCENE LOGIC ---
 function addDefaultCube() {
     const geo = createBasicGeometry('box');
-    const mat = new THREE.MeshPhysicalMaterial({ color: 0xcccccc, roughness: 0.4, metalness: 0.2, transmission: 0, ior: 1.5, thickness: 0, wireframe: isWireframe, side: THREE.DoubleSide });
+    const mat = new THREE.MeshPhysicalMaterial({ color: 0xcccccc, roughness: 0.55, metalness: 0.05, transmission: 0, ior: 1.5, thickness: 0, wireframe: isWireframe, side: THREE.DoubleSide });
     const mesh = new THREE.Mesh(geo, mat);
     const size = getLocalSize(mesh);
     mesh.position.set(0, 0, size.z / 2);
@@ -5312,7 +5312,7 @@ function handleSTLImport(e) {
         geo.computeBoundingSphere();
         if (!geo.attributes.normal) geo.computeVertexNormals();
 
-        const mat = new THREE.MeshPhysicalMaterial({ color: 0xcccccc, roughness: 0.4, metalness: 0.2, transmission: 0, ior: 1.5, thickness: 0, wireframe: isWireframe, side: THREE.DoubleSide });
+        const mat = new THREE.MeshPhysicalMaterial({ color: 0xcccccc, roughness: 0.55, metalness: 0.05, transmission: 0, ior: 1.5, thickness: 0, wireframe: isWireframe, side: THREE.DoubleSide });
         const mesh = new THREE.Mesh(geo, mat);
         mesh.userData.trueColor = 0xcccccc;
         mesh.userData.opacity = 1;
@@ -5345,7 +5345,7 @@ function handleSVGImport(e) {
         const svgData = loader.parse(ev.target.result);
         const paths = svgData.paths;
         const group = new THREE.Group();
-        const mat = new THREE.MeshPhysicalMaterial({ color: 0xcccccc, roughness: 0.4, metalness: 0.2, transmission: 0, ior: 1.5, thickness: 0, wireframe: isWireframe, side: THREE.DoubleSide });
+        const mat = new THREE.MeshPhysicalMaterial({ color: 0xcccccc, roughness: 0.55, metalness: 0.05, transmission: 0, ior: 1.5, thickness: 0, wireframe: isWireframe, side: THREE.DoubleSide });
 
         for ( let i = 0; i < paths.length; i ++ ) {
             const path = paths[ i ];
@@ -5430,7 +5430,7 @@ function createShape(type) {
 
     pushToUndo();
     const geo = createBasicGeometry(type);
-    const mat = new THREE.MeshPhysicalMaterial({ color: 0xcccccc, roughness: 0.4, metalness: 0.2, transmission: 0, ior: 1.5, thickness: 0, wireframe: isWireframe, side: THREE.DoubleSide });
+    const mat = new THREE.MeshPhysicalMaterial({ color: 0xcccccc, roughness: 0.55, metalness: 0.05, transmission: 0, ior: 1.5, thickness: 0, wireframe: isWireframe, side: THREE.DoubleSide });
     const mesh = new THREE.Mesh(geo, mat);
     const size = getLocalSize(mesh);
     mesh.position.set(0, 0, size.z / 2); 
@@ -5462,7 +5462,7 @@ function confirmTubeShape() {
     pushToUndo();
 
     const geo = createTubeGeometry(outerR, innerR, height, segments);
-    const mat = new THREE.MeshPhysicalMaterial({ color: 0xcccccc, roughness: 0.4, metalness: 0.2, transmission: 0, ior: 1.5, thickness: 0, wireframe: isWireframe, side: THREE.DoubleSide });
+    const mat = new THREE.MeshPhysicalMaterial({ color: 0xcccccc, roughness: 0.55, metalness: 0.05, transmission: 0, ior: 1.5, thickness: 0, wireframe: isWireframe, side: THREE.DoubleSide });
     const mesh = new THREE.Mesh(geo, mat);
     const size = getLocalSize(mesh);
     mesh.position.set(0, 0, size.z / 2);
@@ -5495,7 +5495,7 @@ function confirmTextShape() {
         geo.computeBoundingBox();
         geo.computeBoundingSphere();
         
-        const mat = new THREE.MeshPhysicalMaterial({ color: 0xcccccc, roughness: 0.4, metalness: 0.2, transmission: 0, ior: 1.5, thickness: 0, wireframe: isWireframe, side: THREE.DoubleSide });
+        const mat = new THREE.MeshPhysicalMaterial({ color: 0xcccccc, roughness: 0.55, metalness: 0.05, transmission: 0, ior: 1.5, thickness: 0, wireframe: isWireframe, side: THREE.DoubleSide });
         const mesh = new THREE.Mesh(geo, mat);
         const textSize = getLocalSize(mesh);
         mesh.position.set(0, 0, textSize.z / 2);
@@ -5527,7 +5527,7 @@ function confirmBevelShape() {
     const geo = createBevelGeometry(type, size, segments);
     let name = "Beveled " + (type === 'box' ? "Cube" : "Cylinder");
     
-    const mat = new THREE.MeshPhysicalMaterial({ color: 0xcccccc, roughness: 0.4, metalness: 0.2, transmission: 0, ior: 1.5, thickness: 0, wireframe: isWireframe, side: THREE.DoubleSide });
+    const mat = new THREE.MeshPhysicalMaterial({ color: 0xcccccc, roughness: 0.55, metalness: 0.05, transmission: 0, ior: 1.5, thickness: 0, wireframe: isWireframe, side: THREE.DoubleSide });
     const mesh = new THREE.Mesh(geo, mat);
     
     mesh.position.set(0, 0, 1); 
@@ -6261,11 +6261,11 @@ function updateObjectFromUI(e) {
                 c.userData.opacity = pickedOpacity; 
                 c.userData.materialType = pickedMat;
                 if (pickedMat === 'metal') {
-                    c.material.roughness = 0.2; c.material.metalness = 0.8; c.material.transmission = 0; c.material.thickness = 0;
+                    c.material.roughness = 0.35; c.material.metalness = 0.7; c.material.transmission = 0; c.material.thickness = 0;
                 } else if (pickedMat === 'glass') {
-                    c.material.roughness = 0.05; c.material.metalness = 0.1; c.material.transmission = 0.9; c.material.ior = 1.5; c.material.thickness = 2.0;
+                    c.material.roughness = 0.15; c.material.metalness = 0.05; c.material.transmission = 0.85; c.material.ior = 1.45; c.material.thickness = 1.2;
                 } else { // matte
-                    c.material.roughness = 0.4; c.material.metalness = 0.2; c.material.transmission = 0; c.material.thickness = 0;
+                    c.material.roughness = 0.55; c.material.metalness = 0.05; c.material.transmission = 0; c.material.thickness = 0;
                 }
             } 
         });

@@ -30,20 +30,20 @@ export function updateLighting(val, scene) {
     const sun = scene.getObjectByName('SunLight');
 
     if (mode === 'world') {
-        if (ambient) ambient.intensity = 0.45 * intensity;
-        if (hemi) hemi.intensity = 0.55 * intensity;
+        if (ambient) ambient.intensity = 0.70 * intensity;
+        if (hemi) hemi.intensity = 0.65 * intensity;
         if (fillGroup) {
             fillGroup.visible = true;
-            if (fillGroup.children[0]) fillGroup.children[0].intensity = 0.65 * intensity;
-            if (fillGroup.children[1]) fillGroup.children[1].intensity = 0.50 * intensity;
-            if (fillGroup.children[2]) fillGroup.children[2].intensity = 0.35 * intensity;
+            if (fillGroup.children[0]) fillGroup.children[0].intensity = 0.55 * intensity;
+            if (fillGroup.children[1]) fillGroup.children[1].intensity = 0.40 * intensity;
+            if (fillGroup.children[2]) fillGroup.children[2].intensity = 0.30 * intensity;
         }
         if (sun) sun.intensity = 0;
     } else {
-        if (ambient) ambient.intensity = 0.55 * intensity;
-        if (hemi) hemi.intensity = 0;
+        if (ambient) ambient.intensity = 0.60 * intensity;
+        if (hemi) hemi.intensity = 0.30 * intensity;
         if (fillGroup) fillGroup.visible = false;
-        if (sun) sun.intensity = 1.15 * intensity;
+        if (sun) sun.intensity = 1.10 * intensity;
     }
 
     if ('environmentIntensity' in scene) {
